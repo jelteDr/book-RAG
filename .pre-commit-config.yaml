@@ -1,0 +1,28 @@
+# Pre-Commit-Hooks als Sicherheitsnetz für ein SOFORT-öffentliches Repo.
+# Installation (einmalig):  pipx install pre-commit  (oder: uv tool install pre-commit)
+#                           pre-commit install
+# gitleaks lädt sein Binary selbst über den Hook-Repo — keine separate Installation nötig.
+repos:
+  # Secret-Scanner: fängt versehentlich committete Tokens/Keys (ghp_, github_pat_, ...)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # Entfernt Notebook-Zell-Outputs, damit kein Buchtext / keine Antworten in die
+  # .ipynb-History gelangen (Urheberrecht + Repo-Hygiene).
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+
+  # Allgemeine Hygiene.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-merge-conflict
+      - id: detect-private-key

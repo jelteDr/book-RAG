@@ -1,0 +1,39 @@
+# --- Daten & Modelle: NIEMALS committen (Urheberrecht + Größe) ---
+data/
+models/
+*.gguf
+*.bin
+
+# --- Datenbanken & Vektorstore: enthalten Buchtext -> nur in Docker-Volumes ---
+*.db
+*.sqlite
+*.sqlite3
+qdrant_storage/
+
+# --- Secrets ---
+.env
+*.pem
+
+# --- Python ---
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Notebooks: Outputs werden von nbstripout entfernt; Checkpoints ignorieren ---
+.ipynb_checkpoints/
+
+# --- Node / Angular ---
+node_modules/
+dist/
+.angular/
+
+# --- Cleaning-Reports (können Buchtext-Samples enthalten) ---
+reports/
+
+# --- OS / Editor ---
+.DS_Store
+.idea/
+.vscode/
