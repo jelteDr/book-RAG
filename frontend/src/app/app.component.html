@@ -1,0 +1,94 @@
+<div class="app">
+  <header>
+    <h1>book-RAG</h1>
+    <div class="controls">
+      <label>
+        Modell
+        <select [ngModel]="selectedModel()" (ngModelChange)="selectedModel.set($event)">
+          @for (m of models(); track m) {
+            <option [value]="m">{{ m }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        Gruppe
+        <input
+          [ngModel]="groupId()"
+          (ngModelChange)="groupId.set($event)"
+          placeholder="z. B. horror-classics"
+        />
+      </label>
+    </div>
+  </header>
+
+  <main class="chat">
+    @for (msg of messages(); track $index) {
+      <div class="msg" [class.user]="msg.role === 'user'">
+        <div class="bubble">
+          @if (msg.role === 'assistant') {
+            @for (seg of segments(msg.text); track $index) {
+              @if (seg.marker !== null) {
+                <a class="cite" (click)="onCite(msg, seg.marker)">{{ seg.text }}</a>
+              } @else {
+                <span>{{ seg.text }}</span>
+              }
+            }
+            @if (msg.error) {
+              <span class="error">{{ msg.error }}</span>
+            }
+
+            @if (msg.sources?.length) {
+              <div class="sources">
+                <span class="src-title">Quellen:</span>
+                @for (s of msg.sources; track s.marker) {
+                  <button
+                    class="chip"
+                    [class.active]="expanded() === s"
+                    (click)="toggleSource(s)"
+                  >
+                    [{{ s.marker }}] {{ s.chapter }} · {{ s.score }}
+                  </button>
+                }
+              </div>
+            }
+
+            @if (expanded(); as ex) {
+              @if (msg.sources?.includes(ex)) {
+                <div class="src-detail">
+                  <strong>[{{ ex.marker }}] {{ ex.book_title }} — {{ ex.chapter }}</strong>
+                  <p>{{ ex.text }}</p>
+                </div>
+              }
+            }
+
+            @if (msg.meta) {
+              <div class="meta">
+                {{ msg.meta.model }} · TTFT {{ msg.meta.ttft_ms }} ms ·
+                {{ msg.meta.e2e_ms }} ms · {{ msg.meta.tps }} tok/s
+              </div>
+            }
+          } @else {
+            {{ msg.text }}
+          }
+        </div>
+      </div>
+    }
+
+    @if (streaming()) {
+      <div class="msg">
+        <div class="bubble">{{ draft() }}<span class="cursor">▊</span></div>
+      </div>
+    }
+  </main>
+
+  <footer>
+    <textarea
+      [ngModel]="question()"
+      (ngModelChange)="question.set($event)"
+      (keydown.enter)="onEnter($event)"
+      placeholder="Frage zum Buch stellen…"
+      rows="2"
+    ></textarea>
+    <button (click)="send()" [disabled]="streaming() || !question().trim()">Senden</button>
+  </footer>
+</div>
