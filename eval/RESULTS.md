@@ -78,10 +78,37 @@ Skeptikern, Zahlen exakt reproduziert).
 *verschiedene* Chunks, daher greift die RRF-Verstärkung kaum. Die „Verwässerung"
 ist teils ein struktureller Effekt der Chunk-Fusion, nicht nur der Gleichgewichtung.
 
-## Nächste Schritte (bevor eine Design-Entscheidung fällt)
+## Experiment 3 — Cross-Encoder-Reranker (`eval/reranker_experiment.py`)
 
-1. **Gold-Set auf n≥30–50** vergrößern + Bootstrap-CI / paired Test.
-2. **`bm25_en`-Arm** auf dem bereits vorhandenen `question_en` — trennt „BM25 schwach"
-   von „BM25 cross-lingual verhungert".
-3. Erst dann **gewichtete Fusion** (Dense bevorzugt) bzw. **Cross-Encoder-Reranker**
-   (z. B. bge-reranker-v2-m3) als eigentlicher Qualitäts-Hebel vergleichen.
+Gold-Set auf **n=21** erweitert (Labels im Quelltext verankert). Dense holt 30
+Kandidaten, `bge-reranker-v2-m3` (multilingual) sortiert neu.
+
+| Metrik | dense | + Reranker | Δ |
+|---|---|---|---|
+| Hit-Rate@1 | 0.43 | **0.48** | +0.05 |
+| Hit-Rate@3 | 0.67 | 0.67 | 0.00 |
+| Hit-Rate@5 | 0.76 | 0.71 | −0.05 |
+| Hit-Rate@8 | 0.81 | 0.76 | −0.05 |
+| MRR | 0.567 | **0.602** | +0.035 |
+
+![dense vs reranker](../results/reranker_experiment.png)
+
+**Ergebnis:** Der Reranker verbessert **Precision@1 und MRR** (bringt einen Treffer
+nach vorn) — genau seine erwartete Stärke — verschlechtert aber die **Tail-Recall**
+(@5/@8). Gepaarte Erst-Treffer-Bilanz 4:7 (dense), aber der Reranker gewinnt deutlicher,
+wo er gewinnt (d21 15→2, d10 3→1, d06 4→1).
+
+**Caveat (wichtig):** Die Metrik ist **kapitel-basiert**, der Cross-Encoder arbeitet
+**passagen-basiert**. Er stuft „richtiges Kapitel, aber thematisch daneben"-Chunks
+korrekt herab — die Kapitel-Metrik zählt das als Verlust (z. B. d02 4→26). Der Reranker
+wird dadurch systematisch **unterbewertet**; für RAG zählt „bester Chunk zuerst"
+(Precision@1/MRR), und das verbessert er. Faire Bewertung braucht **passagen-basierte
+Gold-Labels**.
+
+## Nächste Schritte
+
+1. **Passagen-basierte Gold-Labels** (statt kapitel-basiert) — dann bewertet die
+   Metrik den Reranker fair; Gold-Set weiter auf n≥30–50.
+2. **`bm25_en`-Arm** — trennt „BM25 schwach" von „cross-lingual verhungert".
+3. Reranker in die `/chat`-Pipeline integrieren (Precision@1/MRR-Gewinn hilft der
+   Antwortqualität direkt), plus Bootstrap-CI / paired Test.
