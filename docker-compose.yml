@@ -1,0 +1,51 @@
+# dev-Profil: Qdrant + Backend im Container, Ollama läuft NATIV auf dem Host (Metal).
+# Voraussetzung: Host-Ollama muss auf 0.0.0.0 lauschen, sonst ist es aus dem Container
+# nicht erreichbar:  launchctl setenv OLLAMA_HOST 0.0.0.0:11434  (Ollama neu starten).
+#
+# Werte werden aus .env interpoliert (falls vorhanden), sonst greifen die Defaults.
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      # TCP-Probe auf den REST-Port (kein curl im Image nötig; debian-slim hat bash).
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build: ./backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      # host.docker.internal zeigt dank extra_hosts auf den Host (auch unter Linux).
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - CHAT_MODEL=${CHAT_MODEL:-qwen2.5:7b-instruct-q4_K_M}
+      - EMBED_MODEL=${EMBED_MODEL:-bge-m3}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=${QDRANT_COLLECTION:-book_chunks}
+      - SQLITE_PATH=/data/book_rag.db
+      - TOP_K=${TOP_K:-8}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/data
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  qdrant_storage:
