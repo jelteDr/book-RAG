@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # Ollama (Chat + Embeddings), OpenAI-kompatibler /v1-Endpunkt.
     ollama_base_url: str = "http://localhost:11434"
-    chat_model: str = "qwen2.5:7b-instruct-q4_K_M"
+    chat_model: str = "qwen2.5:7b-instruct-q4_k_m"
     embed_model: str = "bge-m3"  # FEST – Wechsel würde den Index inkonsistent machen.
 
     # Qdrant.
