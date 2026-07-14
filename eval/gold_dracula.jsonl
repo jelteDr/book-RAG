@@ -1,0 +1,10 @@
+{"id": "d01", "question": "Warum reist Jonathan Harker nach Transsilvanien?", "relevant_chapters": ["I", "II"], "note": "Immobiliengeschaeft fuer Graf Dracula"}
+{"id": "d02", "question": "Wie beobachtet Harker, dass Graf Dracula die Schlosswand hinabklettert?", "relevant_chapters": ["III"], "note": "kriecht kopfueber die Mauer hinab"}
+{"id": "d03", "question": "Was geschieht mit dem Schiff Demeter, als es Whitby erreicht?", "relevant_chapters": ["VII"], "note": "Sturm, Schiff strandet, toter Kapitaen am Steuer"}
+{"id": "d04", "question": "Wer ist Renfield und welches ungewoehnliche Verhalten zeigt er?", "relevant_chapters": ["VI", "VIII"], "note": "zoophag, isst Fliegen/Spinnen/Voegel"}
+{"id": "d05", "question": "Wer ist Professor Van Helsing und warum wird er gerufen?", "relevant_chapters": ["IX", "X"], "note": "Sewards alter Lehrer, wegen Lucys Krankheit"}
+{"id": "d06", "question": "Wie versuchen die Aerzte, Lucy Westenra zu retten?", "relevant_chapters": ["X", "XI", "XII"], "note": "Bluttransfusionen"}
+{"id": "d07", "question": "Was passiert mit Lucy nach ihrem Tod?", "relevant_chapters": ["XV", "XVI"], "note": "wird Vampir, wird gepfaehlt"}
+{"id": "d08", "question": "Wie stirbt Graf Dracula am Ende des Buches?", "relevant_chapters": ["XXVII"], "note": "Messer durch Kehle und Herz"}
+{"id": "d09", "question": "Welche Mittel setzt Van Helsing zur Abwehr des Vampirs ein?", "relevant_chapters": ["XII", "XIII", "XIV"], "note": "Knoblauch, geweihte Hostie, Kruzifix"}
+{"id": "d10", "question": "Wie hilft Mina Harker bei der Jagd auf Dracula mit ihren Aufzeichnungen?", "relevant_chapters": ["XVII", "XVIII"], "note": "tippt und ordnet die Tagebuecher"}
