@@ -23,7 +23,8 @@ services:
   backend:
     build: ./backend
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      # Host-Port 8001 (8000 ist auf diesem Rechner belegt); Container-intern bleibt 8000.
+      - "${BACKEND_PORT:-8001}:8000"
     environment:
       # host.docker.internal zeigt dank extra_hosts auf den Host (auch unter Linux).
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
@@ -52,7 +53,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-4200}:80"
     environment:
-      - BACKEND_UPSTREAM=backend:8000
+      - BACKEND_UPSTREAM=${BACKEND_UPSTREAM:-backend:8000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
