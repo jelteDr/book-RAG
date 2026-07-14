@@ -1,0 +1,34 @@
+# full-Override: Ollama zusätzlich als Container (Portabilität/Linux-GPU).
+# HINWEIS: Auf macOS läuft der Ollama-Container CPU-only (kein Metal in Docker) und ist
+# deutlich langsamer — dieses Profil ist eine Doku-/Portabilitäts-Fußnote.
+#
+# Start:  docker compose -f docker-compose.yml -f docker-compose.full.yml up
+# Modelle einmalig laden:  docker compose exec ollama ollama pull bge-m3
+#                          docker compose exec ollama ollama pull llama3.2:3b
+
+services:
+  ollama:
+    # TODO: bei Bedarf auf eine konkrete Version pinnen (kein latest in Produktion).
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    ports:
+      - "11435:11434"   # Host-Port 11435, um Kollision mit Host-Ollama (11434) zu vermeiden
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  backend:
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+
+volumes:
+  ollama_models:
