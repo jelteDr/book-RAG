@@ -1,10 +1,10 @@
-{"id": "d01", "question": "Warum reist Jonathan Harker nach Transsilvanien?", "relevant_chapters": ["I", "II"], "note": "Immobiliengeschaeft fuer Graf Dracula"}
-{"id": "d02", "question": "Wie beobachtet Harker, dass Graf Dracula die Schlosswand hinabklettert?", "relevant_chapters": ["III"], "note": "kriecht kopfueber die Mauer hinab"}
-{"id": "d03", "question": "Was geschieht mit dem Schiff Demeter, als es Whitby erreicht?", "relevant_chapters": ["VII"], "note": "Sturm, Schiff strandet, toter Kapitaen am Steuer"}
-{"id": "d04", "question": "Wer ist Renfield und welches ungewoehnliche Verhalten zeigt er?", "relevant_chapters": ["VI", "VIII"], "note": "zoophag, isst Fliegen/Spinnen/Voegel"}
-{"id": "d05", "question": "Wer ist Professor Van Helsing und warum wird er gerufen?", "relevant_chapters": ["IX", "X"], "note": "Sewards alter Lehrer, wegen Lucys Krankheit"}
-{"id": "d06", "question": "Wie versuchen die Aerzte, Lucy Westenra zu retten?", "relevant_chapters": ["X", "XI", "XII"], "note": "Bluttransfusionen"}
-{"id": "d07", "question": "Was passiert mit Lucy nach ihrem Tod?", "relevant_chapters": ["XV", "XVI"], "note": "wird Vampir, wird gepfaehlt"}
-{"id": "d08", "question": "Wie stirbt Graf Dracula am Ende des Buches?", "relevant_chapters": ["XXVII"], "note": "Messer durch Kehle und Herz"}
-{"id": "d09", "question": "Welche Mittel setzt Van Helsing zur Abwehr des Vampirs ein?", "relevant_chapters": ["XII", "XIII", "XIV"], "note": "Knoblauch, geweihte Hostie, Kruzifix"}
-{"id": "d10", "question": "Wie hilft Mina Harker bei der Jagd auf Dracula mit ihren Aufzeichnungen?", "relevant_chapters": ["XVII", "XVIII"], "note": "tippt und ordnet die Tagebuecher"}
+{"id": "d01", "question": "Warum reist Jonathan Harker nach Transsilvanien?", "question_en": "Why does Jonathan Harker travel to Transylvania?", "relevant_chapters": ["I", "II"], "note": "Immobiliengeschaeft fuer Graf Dracula"}
+{"id": "d02", "question": "Wie beobachtet Harker, dass Graf Dracula die Schlosswand hinabklettert?", "question_en": "How does Harker observe Count Dracula crawling down the castle wall?", "relevant_chapters": ["III"], "note": "kriecht kopfueber die Mauer hinab"}
+{"id": "d03", "question": "Was geschieht mit dem Schiff Demeter, als es Whitby erreicht?", "question_en": "What happens to the ship Demeter when it reaches Whitby?", "relevant_chapters": ["VII"], "note": "Sturm, Schiff strandet, toter Kapitaen am Steuer"}
+{"id": "d04", "question": "Wer ist Renfield und welches ungewoehnliche Verhalten zeigt er?", "question_en": "Who is Renfield and what unusual behavior does he show?", "relevant_chapters": ["VI", "VIII"], "note": "zoophag, isst Fliegen/Spinnen/Voegel"}
+{"id": "d05", "question": "Wer ist Professor Van Helsing und warum wird er gerufen?", "question_en": "Who is Professor Van Helsing and why is he summoned?", "relevant_chapters": ["IX", "X"], "note": "Sewards alter Lehrer, wegen Lucys Krankheit"}
+{"id": "d06", "question": "Wie versuchen die Aerzte, Lucy Westenra zu retten?", "question_en": "How do the doctors try to save Lucy Westenra?", "relevant_chapters": ["X", "XI", "XII"], "note": "Bluttransfusionen"}
+{"id": "d07", "question": "Was passiert mit Lucy nach ihrem Tod?", "question_en": "What happens to Lucy after her death?", "relevant_chapters": ["XV", "XVI"], "note": "wird Vampir, wird gepfaehlt"}
+{"id": "d08", "question": "Wie stirbt Graf Dracula am Ende des Buches?", "question_en": "How does Count Dracula die at the end of the book?", "relevant_chapters": ["XXVII"], "note": "Messer durch Kehle und Herz"}
+{"id": "d09", "question": "Welche Mittel setzt Van Helsing zur Abwehr des Vampirs ein?", "question_en": "What means does Van Helsing use to ward off the vampire?", "relevant_chapters": ["XII", "XIII", "XIV"], "note": "Knoblauch, geweihte Hostie, Kruzifix"}
+{"id": "d10", "question": "Wie hilft Mina Harker bei der Jagd auf Dracula mit ihren Aufzeichnungen?", "question_en": "How does Mina Harker help hunt Dracula with her records?", "relevant_chapters": ["XVII", "XVIII"], "note": "tippt und ordnet die Tagebuecher"}
