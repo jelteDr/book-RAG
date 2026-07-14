@@ -105,6 +105,32 @@ wird dadurch systematisch **unterbewertet**; für RAG zählt „bester Chunk zue
 (Precision@1/MRR), und das verbessert er. Faire Bewertung braucht **passagen-basierte
 Gold-Labels**.
 
+## Metrik-Suite — Antwortqualität + Serving (`eval/answer_eval.py`)
+
+Pro Gold-Frage (n=21) wird die volle RAG-Pipeline ausgeführt (Modell `qwen2.5:7b`, k=8):
+
+| Kategorie | Metrik | Wert (mean) |
+|---|---|---|
+| Antwort | ROUGE-L | 0.124 |
+| Antwort | Antwort-Token-F1 | 0.153 |
+| Antwort | **Faithfulness (NLI, mDeBERTa-xnli)** | **0.667** |
+| Retrieval | Recall@8 | 0.770 |
+| Retrieval | MRR | 0.556 |
+| Serving | TTFT (median) | ~7.4 s\* |
+| Serving | TPS (median) | 11.8 tok/s |
+| Serving | e2e (median) | ~19 s |
+
+<sub>\* TTFT im Batch-Lauf durch Speicherdruck/Modell-Reloads (24 GB) erhöht; interaktiv/warm ~0,2–4 s.</sub>
+
+**Interpretation:**
+- **ROUGE-L/F1 sind niedrig (~0.12–0.15), obwohl die Antworten korrekt sind** — sie messen nur
+  n-Gramm-Überlappung mit einer kurzen Referenzantwort und bestrafen Paraphrasen. Für generatives
+  RAG sind sie deshalb nur schwache Signale (nützlich als *relativer* Vergleich zwischen Modellen).
+- **Faithfulness (NLI) = 0.667** ist das aussagekräftigere Maß: 2/3 der Antwort-Aussagen werden von
+  den abgerufenen Passagen *gestützt* (Entailment). Die Lücke zeigt Raum nach oben (Retrieval-Gaps
+  oder ungestützte Modell-Zusätze) — bewusst statt PPL gewählt, das nur Fluenz misst.
+- Roh-Ergebnisse pro Frage: `results/answer_eval.json`.
+
 ## Nächste Schritte
 
 1. **Passagen-basierte Gold-Labels** (statt kapitel-basiert) — dann bewertet die
