@@ -84,6 +84,31 @@ class VectorStore:
         )
         return result.points
 
+    async def scroll_all(
+        self, group_id: str | None = None, batch: int = 256
+    ) -> list[models.Record]:
+        """Alle Chunks (optional gefiltert) auslesen — z. B. für einen BM25-Index."""
+        flt = None
+        if group_id:
+            flt = models.Filter(
+                must=[models.FieldCondition(key="group_id", match=models.MatchValue(value=group_id))]
+            )
+        results: list[models.Record] = []
+        offset = None
+        while True:
+            points, offset = await self._client.scroll(
+                collection_name=self._collection,
+                scroll_filter=flt,
+                limit=batch,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            results.extend(points)
+            if offset is None:
+                break
+        return results
+
     async def health(self) -> bool:
         """True, wenn Qdrant erreichbar ist."""
         try:

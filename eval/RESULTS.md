@@ -2,46 +2,86 @@
 
 Reproduzierbar via `make eval` (Baseline) bzw. den Experiment-Skripten in `eval/`.
 Korpus: Dracula (581 Chunks), Embeddings `bge-m3`, Qdrant Cosine. Relevanz
-kapitel-basiert (Gold-Set: `eval/gold_dracula.jsonl`, 10 Fragen).
+**kapitel-basiert** (Gold-Set `eval/gold_dracula.jsonl`, **n=10** Fragen).
 
-## Baseline (deutsche Fragen, k=8)
+> **Metrik-Hinweis (Ehrlichkeit):** Was hier „Recall@k" heißt, ist faktisch
+> **Hit-Rate@k / Success@k** — der Wert ist 1.0, sobald *irgendein* relevantes
+> Kapitel in Top-k liegt (nicht der Deckungsgrad über alle Gold-Kapitel). Bei
+> Multi-Kapitel-Fragen überschätzt das die Güte. Der Vergleich zwischen Methoden
+> bleibt fair (für alle identisch berechnet).
+>
+> **Statistik-Hinweis:** n=10 ist ein exploratives **Dev-Set ohne Signifikanz**.
+> Jede Frage bewegt Hit-Rate um 0.10; MRR-Standardfehler ~0.13. Aussagen sind
+> Trends, keine belastbaren Rankings. Für belastbare Schlüsse: Gold-Set auf
+> n≥30–50 vergrößern + Bootstrap-CI / paired Test.
+
+## Baseline — dense (bge-m3), deutsche Fragen, k=8
 
 | Metrik | Wert |
 |---|---|
-| Recall@1 | 0.40 |
-| Recall@3 | 0.60 |
-| Recall@5 | 0.80 |
-| Recall@8 | 0.80 |
-| MRR | 0.517 |
+| Hit-Rate@1 | 0.40 |
+| Hit-Rate@3 | 0.60 |
+| Hit-Rate@5 | 0.80 |
+| Hit-Rate@8 | 0.80 |
+| MRR | 0.535 |
 
-Misses (kein relevantes Kapitel in Top-8): **d01** (Harkers Reisegrund) und
+Misses (kein relevantes Kapitel in Top-8): **d01** (Harkers Reisegrund),
 **d09** (Vampir-Abwehrmittel).
 
 ## Experiment 1 — Frage DE vs. EN (`eval/lang_experiment.py`)
 
-**Hypothese:** Die mäßige Baseline liegt am cross-lingualen Gap (DE-Frage →
-EN-Text). **Test:** dieselben Fragen auf Deutsch vs. Englisch retrieven (nur die
-Query wird neu eingebettet, die Chunks bleiben unverändert).
+**Hypothese:** Die mäßige Baseline liegt am cross-lingualen Gap (DE-Frage → EN-Text).
 
 | Metrik | DE | EN | Δ |
 |---|---|---|---|
-| Recall@1 | 0.40 | 0.20 | −0.20 |
-| Recall@3 | 0.60 | 0.70 | +0.10 |
-| Recall@5 | 0.80 | 0.80 | 0.00 |
-| Recall@8 | 0.80 | **1.00** | +0.20 |
+| Hit-Rate@1 | 0.40 | 0.20 | −0.20 |
+| Hit-Rate@3 | 0.60 | 0.70 | +0.10 |
+| Hit-Rate@5 | 0.80 | 0.80 | 0.00 |
+| Hit-Rate@8 | 0.80 | **1.00** | +0.20 |
 | MRR | 0.517 | 0.450 | −0.067 |
 
 ![DE vs EN](../results/lang_experiment.png)
 
-**Ergebnis — Hypothese teilweise widerlegt:**
-- `bge-m3` ist echt multilingual: deutsche Fragen ranken den **Top-Treffer sogar
-  besser** (Recall@1 0.40 vs 0.20, MRR 0.517 vs 0.450). Query-Übersetzung ist also
-  **kein** pauschaler Fix — sie verschlechtert die Präzision an Position 1.
-- Englisch bringt nur im **Tail** Vorteile: die beiden harten Misses d01/d09
-  tauchen auf Englisch auf (Recall@8 1.00 vs 0.80), aber erst auf Rang 8.
+**Ergebnis — Hypothese teilweise widerlegt:** `bge-m3` ist echt multilingual; DE
+rankt den Top-Treffer sogar besser (Hit-Rate@1, MRR). EN hilft nur im Tail (die
+Misses d01/d09 tauchen auf, aber erst auf Rang 8). → **Query-Übersetzung ist kein Fix.**
 
-**Schlussfolgerung / nächster Schritt:** Der Flaschenhals ist nicht primär die
-Sprache, sondern **breite, über viele Kapitel verteilte Fragen + Eigennamen**
-("Demeter", "Harker"), bei denen reines Dense-Retrieval schwächelt. Deshalb ist
-das nächste Experiment **Hybrid-Retrieval (Dense + BM25/Sparse, RRF)** bzw. ein
-Cross-Encoder-Reranker — das adressiert Eigennamen und Tail-Treffer direkt.
+## Experiment 2 — Dense vs. BM25 vs. Hybrid/RRF (`eval/hybrid_experiment.py`)
+
+**Idee:** BM25 (lexikalisch) matcht Eigennamen direkt; per Reciprocal Rank Fusion
+(RRF, k=60, CAND=30) mit Dense kombiniert. Adversariell verifiziert (Panel aus 4
+Skeptikern, Zahlen exakt reproduziert).
+
+| Metrik | dense | bm25 | hybrid |
+|---|---|---|---|
+| Hit-Rate@1 | 0.40 | 0.20 | 0.30 |
+| Hit-Rate@3 | 0.60 | 0.30 | 0.60 |
+| Hit-Rate@5 | 0.80 | 0.50 | 0.60 |
+| Hit-Rate@8 | 0.80 | 0.60 | 0.80 |
+| MRR | 0.535 | 0.331 | 0.467 |
+
+![dense vs bm25 vs hybrid](../results/hybrid_experiment.png)
+
+**Ehrliches Ergebnis (nach Verifikation):**
+- **Naives RRF-Hybrid bringt bei n=10 KEINEN messbaren Netto-Vorteil** gegenüber
+  Dense. Die gepaarte Reciprocal-Rank-Bilanz Dense↔Hybrid ist **4:4** (praktisch
+  ein Münzwurf). Hybrid *rettet* einzelne Dense-Misses (d01: 10→6, d09: 12→1),
+  *verschlechtert* aber einzelne Dense-Top-1-Treffer (d02: 4→16, d08: 1→9) —
+  jeweils ~2 Fragen, nicht generalisierbar.
+- **BM25 solo liegt durchgängig am niedrigsten** — aber im **Cross-Lingual-Handicap**
+  (deutsche Frage gegen englischen Korpus). Das ist *kein* fairer BM25-Ceiling;
+  BM25 gewinnt nur dort, wo seltene Eigennamen fallen (d03 „Demeter/Whitby", d06 „Westenra").
+- „Dense ist am besten" wäre **überzogen** (bei n=10 nicht von Hybrid unterscheidbar).
+
+**Struktureller Hinweis:** RRF fusioniert auf **Chunk**-Ebene, die Metrik ist
+**Kapitel**-basiert — Dense und BM25 treffen dasselbe relevante Kapitel oft über
+*verschiedene* Chunks, daher greift die RRF-Verstärkung kaum. Die „Verwässerung"
+ist teils ein struktureller Effekt der Chunk-Fusion, nicht nur der Gleichgewichtung.
+
+## Nächste Schritte (bevor eine Design-Entscheidung fällt)
+
+1. **Gold-Set auf n≥30–50** vergrößern + Bootstrap-CI / paired Test.
+2. **`bm25_en`-Arm** auf dem bereits vorhandenen `question_en` — trennt „BM25 schwach"
+   von „BM25 cross-lingual verhungert".
+3. Erst dann **gewichtete Fusion** (Dense bevorzugt) bzw. **Cross-Encoder-Reranker**
+   (z. B. bge-reranker-v2-m3) als eigentlicher Qualitäts-Hebel vergleichen.
