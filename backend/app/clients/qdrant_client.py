@@ -5,10 +5,16 @@ Die Payload trägt den anzeigbaren Chunk-Text (Source-of-Truth) plus Metadaten
 für Filter (book_id, group_id, chapter, char_start/end).
 """
 
+import uuid
+from collections.abc import Sequence
+
 from qdrant_client import AsyncQdrantClient, models
 
 # bge-m3 liefert Dense-Vektoren der Dimension 1024.
 VECTOR_SIZE = 1024
+
+# Fester Namespace für deterministische Punkt-IDs (book_id + chunk_index).
+_ID_NAMESPACE = uuid.UUID("6b6f6f6b-2d72-4167-8000-000000000000")
 
 
 class VectorStore:
@@ -32,6 +38,39 @@ class VectorStore:
                 await self._client.create_payload_index(
                     self._collection, field, models.PayloadSchemaType.KEYWORD
                 )
+
+    async def upsert_chunks(self, points: Sequence[dict]) -> int:
+        """Upsert von Chunks. Jeder dict: {vector, payload} mit payload.book_id/chunk_index."""
+        structs = [
+            models.PointStruct(
+                id=str(
+                    uuid.uuid5(
+                        _ID_NAMESPACE,
+                        f"{p['payload']['book_id']}:{p['payload']['chunk_index']}",
+                    )
+                ),
+                vector=p["vector"],
+                payload=p["payload"],
+            )
+            for p in points
+        ]
+        await self._client.upsert(collection_name=self._collection, points=structs)
+        return len(structs)
+
+    async def delete_by_book(self, book_id: str) -> None:
+        """Alle Chunks eines Buchs löschen (Re-Ingestion / Copyright-Cleanup)."""
+        await self._client.delete(
+            collection_name=self._collection,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="book_id", match=models.MatchValue(value=book_id)
+                        )
+                    ]
+                )
+            ),
+        )
 
     async def search(
         self, vector: list[float], top_k: int, query_filter: models.Filter | None = None
