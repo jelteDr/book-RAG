@@ -8,6 +8,8 @@ export interface Source {
   char_start: number | null;
   char_end: number | null;
   text: string;
+  supported?: boolean; // optionaler Faithfulness-Check (NLI): stützt der Chunk die Aussage?
+  support_score?: number;
 }
 
 export interface Meta {

@@ -57,12 +57,15 @@
                 @for (s of msg.sources; track s.marker) {
                   <button
                     class="rounded-full border px-2.5 py-0.5 text-xs bg-panel2"
-                    [class.border-accent]="expanded() === s"
-                    [class.text-accent]="expanded() === s"
-                    [class.border-edge]="expanded() !== s"
+                    [class.border-accent]="expanded() === s && s.supported !== false"
+                    [class.text-accent]="expanded() === s && s.supported !== false"
+                    [class.border-amber-500]="s.supported === false"
+                    [class.text-amber-400]="s.supported === false"
+                    [class.border-edge]="expanded() !== s && s.supported !== false"
+                    [title]="s.supported === false ? 'Laut NLI nicht klar durch diese Quelle gestützt' : ''"
                     (click)="toggleSource(s)"
                   >
-                    [{{ s.marker }}] {{ s.chapter }} · {{ s.score }}
+                    [{{ s.marker }}] {{ s.chapter }} · {{ s.score }}{{ s.supported === false ? ' ⚠' : '' }}
                   </button>
                 }
               </div>

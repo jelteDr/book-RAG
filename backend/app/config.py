@@ -29,5 +29,11 @@ class Settings(BaseSettings):
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     rerank_candidates: int = 30  # Dense holt so viele Kandidaten, Reranker sortiert auf top_k
 
+    # Faithfulness-Check (optional, opt-in; markiert ungestützte Zitate via NLI).
+    # Braucht ebenfalls die reranker-Dependency-Gruppe (torch/transformers).
+    faithfulness_check_enabled: bool = False
+    faithfulness_model: str = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+    faithfulness_threshold: float = 0.5
+
 
 settings = Settings()

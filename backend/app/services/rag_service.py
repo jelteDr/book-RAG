@@ -32,12 +32,14 @@ class RagService:
         settings: Settings,
         session_factory=None,
         reranker=None,
+        faithfulness=None,
     ) -> None:
         self._ollama = ollama
         self._vectors = vectors
         self._settings = settings
         self._session_factory = session_factory
         self._reranker = reranker
+        self._faithfulness = faithfulness
 
     async def answer(
         self, question: str, *, model: str | None = None, group_id: str | None = None,
@@ -103,6 +105,11 @@ class RagService:
             "sources": extract_citations(answer, points),
             "retrieved": sources_overview(points),
         }
+        # Optional: ungestützte Zitate via NLI markieren (blockierend -> Thread).
+        if self._faithfulness is not None and self._faithfulness.active and done["sources"]:
+            done["sources"] = await asyncio.to_thread(
+                self._faithfulness.check, answer, done["sources"]
+            )
         await self._log_query(question, model, group_id, done)
         yield "done", done
 
