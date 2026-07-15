@@ -202,19 +202,49 @@
             </div>
           }
         </div>
-        <label class="flex items-center gap-1.5">
-          Gruppe
-          <select
-            class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1"
-            [ngModel]="selectedGroup()"
-            (ngModelChange)="selectedGroup.set($event)"
+        <!-- Gruppen-Auswahl im selben Stil wie das Modell -->
+        <div class="relative">
+          <button
+            class="flex items-center gap-1 hover:text-ink"
+            (click)="toggleGroupMenu()"
+            title="Gruppe wechseln"
           >
-            <option value="">(alle)</option>
-            @for (g of groups(); track g.id) {
-              <option [value]="g.slug">{{ g.name }}</option>
-            }
-          </select>
-        </label>
+            <span>{{ selectedGroupLabel() }}</span>
+            <span class="text-[8px]">{{ groupMenuOpen() ? '▾' : '▴' }}</span>
+          </button>
+          @if (groupMenuOpen()) {
+            <!-- Unsichtbarer Backdrop: Klick daneben schließt das Menü -->
+            <div class="fixed inset-0 z-10" (click)="groupMenuOpen.set(false)"></div>
+            <div
+              class="absolute bottom-full left-0 mb-2 z-20 min-w-56 bg-panel border border-edge rounded-lg shadow-lg py-1"
+            >
+              <button
+                class="w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center justify-between gap-3"
+                [class.text-accent]="!selectedGroup()"
+                [class.text-ink]="!!selectedGroup()"
+                (click)="selectGroup('')"
+              >
+                <span class="truncate">Alle Gruppen</span>
+                @if (!selectedGroup()) {
+                  <span class="shrink-0">✓</span>
+                }
+              </button>
+              @for (g of groups(); track g.id) {
+                <button
+                  class="w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center justify-between gap-3"
+                  [class.text-accent]="g.slug === selectedGroup()"
+                  [class.text-ink]="g.slug !== selectedGroup()"
+                  (click)="selectGroup(g.slug)"
+                >
+                  <span class="truncate">{{ g.name }}</span>
+                  @if (g.slug === selectedGroup()) {
+                    <span class="shrink-0">✓</span>
+                  }
+                </button>
+              }
+            </div>
+          }
+        </div>
       </div>
     </div>
   </div>
