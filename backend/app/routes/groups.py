@@ -101,7 +101,9 @@ async def upload_to_group(
         # Fallback: kein Gutenberg-Titel + kein manueller Titel -> Dateiname (statt Buch-Key).
         resolved_title = result.title or (Path(file.filename or "").stem or None)
 
-        if not commit:
+        # result.committed ist False bei Dry-Run ODER fehlgeschlagener Validierung
+        # -> in beiden Fällen nichts persistieren (report enthält validation_errors).
+        if not result.committed:
             return {"committed": False, "title": resolved_title, "author": result.author,
                     "report": result.report}
 

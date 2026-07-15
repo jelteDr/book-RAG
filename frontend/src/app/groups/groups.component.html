@@ -122,6 +122,16 @@
                   bereinigte Zeichen: {{ r.report.cleaned_chars }} · gemergte Zeilen:
                   {{ r.report.lines_merged }} · Verlust: {{ r.report.dropped_ratio }}
                 </div>
+                @if (r.report.validation_errors?.length) {
+                  <div class="text-red-400 font-medium mt-1">
+                    ✗ Validierung fehlgeschlagen — nicht ingestet:
+                    <ul class="list-disc ml-4 font-normal">
+                      @for (e of r.report.validation_errors; track e) {
+                        <li>{{ e }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
                 @if (r.report.warnings?.length) {
                   <div class="text-amber-400">⚠ {{ r.report.warnings.join('; ') }}</div>
                 }

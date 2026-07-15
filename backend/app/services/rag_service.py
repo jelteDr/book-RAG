@@ -22,6 +22,7 @@ from app.db.models import ChatMessage, Conversation, QueryLog
 from app.rag.citations import extract_citations, sources_overview
 from app.rag.prompt_builder import build_messages
 from app.rag.retriever import retrieve
+from app.validation import validate_question
 
 # Ein Event ist (name, payload) — die Route macht daraus SSE.
 Event = tuple[str, dict]
@@ -52,6 +53,12 @@ class RagService:
         model = model or self._settings.chat_model
         top_k = top_k or self._settings.top_k
         t_start = time.perf_counter()
+
+        # Eingabe validieren (Länge + gültige Zeichen), bevor irgendetwas passiert.
+        errors = validate_question(question)
+        if errors:
+            yield "error", {"message": " ".join(errors)}
+            return
 
         # Unterhaltung sicherstellen + Nutzer-Nachricht speichern; prior History holen.
         conversation_id, history = await self._ensure_conversation(
