@@ -23,6 +23,12 @@ class OllamaClient:
         resp.raise_for_status()
         return resp.json().get("models", [])
 
+    async def show(self, model: str) -> dict:
+        """Detail-Metadaten eines Modells (native API `/api/show`)."""
+        resp = await self._client.post("/api/show", json={"model": model})
+        resp.raise_for_status()
+        return resp.json()
+
     async def chat_stream(
         self,
         messages: list[dict],

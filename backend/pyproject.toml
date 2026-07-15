@@ -11,6 +11,9 @@ dependencies = [
     "qdrant-client>=1.12",
     "python-multipart>=0.0.12",   # Datei-Uploads (Ingestion, M1/M3)
     "charset-normalizer>=3.4",    # Encoding-Sniffing (Cleaning, M1)
+    "sqlmodel>=0.0.22",           # ORM (SQLAlchemy 2.0 + Pydantic) für PostgreSQL
+    "asyncpg>=0.30",              # async PostgreSQL-Treiber
+    "greenlet>=3.0",             # von SQLAlchemy-async benötigt
 ]
 
 [dependency-groups]

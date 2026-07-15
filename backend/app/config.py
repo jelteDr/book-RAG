@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "book_chunks"
 
-    # Backend / Persistenz.
+    # Backend / Persistenz (PostgreSQL via SQLModel/asyncpg).
     backend_port: int = 8000
-    sqlite_path: str = "./data/book_rag.db"
+    database_url: str = "postgresql+asyncpg://bookrag:bookrag@localhost:5432/bookrag"
 
     # Retrieval.
     top_k: int = 8
