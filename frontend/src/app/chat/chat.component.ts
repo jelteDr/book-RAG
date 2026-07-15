@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnDestroy,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 
@@ -18,7 +25,7 @@ interface Segment {
   templateUrl: './chat.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ChatComponent {
+export class ChatComponent implements OnDestroy {
   private readonly chat = inject(ChatService);
   private readonly library = inject(LibraryService);
   private readonly route = inject(ActivatedRoute);
@@ -34,6 +41,14 @@ export class ChatComponent {
   readonly draft = signal('');
   readonly streaming = signal(false);
   readonly expanded = signal<Source | null>(null);
+
+  /** Wechselnde Status-Wörter, solange das Modell „denkt" (vor dem ersten Token). */
+  private readonly thinkingWords = ['Denken', 'Grübeln', 'Sucht Quellen', 'Liest Kontext', 'Formuliert'];
+  private readonly thinkingIndex = signal(0);
+  private thinkingTimer: ReturnType<typeof setInterval> | null = null;
+  readonly thinkingWord = computed(
+    () => this.thinkingWords[this.thinkingIndex() % this.thinkingWords.length],
+  );
 
   /** Unterhaltungen nach Gruppe gebündelt (für die Sidebar). */
   readonly groupedConversations = computed(() => {
@@ -102,6 +117,23 @@ export class ChatComponent {
     this.newChat();
   }
 
+  private startThinking(): void {
+    this.thinkingIndex.set(0);
+    this.stopThinking();
+    this.thinkingTimer = setInterval(() => this.thinkingIndex.update((i) => i + 1), 1200);
+  }
+
+  private stopThinking(): void {
+    if (this.thinkingTimer !== null) {
+      clearInterval(this.thinkingTimer);
+      this.thinkingTimer = null;
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.stopThinking();
+  }
+
   async deleteConversation(conv: Conversation, event: Event): Promise<void> {
     event.stopPropagation(); // nicht gleichzeitig laden
     await this.chat.deleteConversation(conv.id);
@@ -161,6 +193,7 @@ export class ChatComponent {
     this.question.set('');
     this.draft.set('');
     this.streaming.set(true);
+    this.startThinking();
 
     try {
       const request = {
@@ -192,6 +225,7 @@ export class ChatComponent {
     } catch (e) {
       this.finish({ role: 'assistant', text: this.draft(), error: `Verbindung fehlgeschlagen: ${e}` });
     } finally {
+      this.stopThinking();
       this.streaming.set(false);
       this.draft.set('');
       void this.refreshConversations();
