@@ -7,6 +7,7 @@ vorhandene Chunks des Buchs werden zuvor gelöscht).
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 from app.clients.ollama_client import OllamaClient
@@ -30,12 +31,20 @@ class IngestResult:
 
 
 async def _embed_batched(
-    ollama: OllamaClient, texts: list[str], model: str, batch_size: int = 32
+    ollama: OllamaClient, texts: list[str], model: str,
+    batch_size: int = 64, concurrency: int = 4,
 ) -> list[list[float]]:
-    vectors: list[list[float]] = []
-    for i in range(0, len(texts), batch_size):
-        vectors.extend(await ollama.embed(texts[i : i + batch_size], model))
-    return vectors
+    """Embeddet in Batches, mehrere Batches parallel (deutlich schneller als sequentiell)."""
+    batches = [texts[i : i + batch_size] for i in range(0, len(texts), batch_size)]
+    sem = asyncio.Semaphore(concurrency)
+
+    async def embed_one(batch: list[str]) -> list[list[float]]:
+        async with sem:
+            return await ollama.embed(batch, model)
+
+    # gather bewahrt die Reihenfolge der Batches -> Chunk-Reihenfolge bleibt korrekt.
+    results = await asyncio.gather(*(embed_one(b) for b in batches))
+    return [vec for batch_vecs in results for vec in batch_vecs]
 
 
 async def ingest_file(path: str, **kwargs) -> IngestResult:
