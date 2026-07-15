@@ -1,7 +1,7 @@
 {
   "name": "book-rag-frontend",
-  "version": "0.1.0",
-  "description": "Minimal Angular chat UI for book-RAG",
+  "version": "0.2.0",
+  "description": "Angular chat + groups/upload + model info UI for book-RAG (Tailwind)",
   "scripts": {
     "start": "ng serve",
     "build": "ng build"
@@ -13,6 +13,7 @@
     "@angular/core": "^18.2.0",
     "@angular/forms": "^18.2.0",
     "@angular/platform-browser": "^18.2.0",
+    "@angular/router": "^18.2.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.10"
@@ -21,6 +22,9 @@
     "@angular-devkit/build-angular": "^18.2.0",
     "@angular/cli": "^18.2.0",
     "@angular/compiler-cli": "^18.2.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
     "typescript": "~5.5.2"
   }
 }

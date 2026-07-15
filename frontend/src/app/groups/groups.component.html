@@ -1,0 +1,124 @@
+<div class="max-w-3xl mx-auto w-full px-4 py-6 flex flex-col gap-6 overflow-y-auto h-full">
+  <h2 class="text-lg font-semibold">Gruppen</h2>
+
+  @if (error()) {
+    <div class="text-red-400 text-sm">{{ error() }}</div>
+  }
+
+  <!-- Neue Gruppe -->
+  <div class="bg-panel border border-edge rounded-xl p-4 flex flex-wrap gap-3 items-end">
+    <label class="flex flex-col gap-1 text-xs text-muted">
+      Slug (Filter-ID)
+      <input
+        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 w-48"
+        [ngModel]="slug()"
+        (ngModelChange)="slug.set($event)"
+        placeholder="z. B. horror-classics"
+      />
+    </label>
+    <label class="flex flex-col gap-1 text-xs text-muted">
+      Name
+      <input
+        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 w-48"
+        [ngModel]="name()"
+        (ngModelChange)="name.set($event)"
+        placeholder="z. B. Horror-Klassiker"
+      />
+    </label>
+    <label class="flex flex-col gap-1 text-xs text-muted">
+      Art
+      <input
+        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 w-40"
+        [ngModel]="kind()"
+        (ngModelChange)="kind.set($event)"
+        placeholder="genre / franchise"
+      />
+    </label>
+    <button
+      class="bg-accent text-[#0b1020] font-semibold rounded-lg px-4 py-1.5 disabled:opacity-50"
+      (click)="createGroup()"
+      [disabled]="!slug().trim() || !name().trim()"
+    >
+      Anlegen
+    </button>
+  </div>
+
+  <!-- Gruppenliste -->
+  <div class="flex flex-col gap-3">
+    @for (g of groups(); track g.id) {
+      <div class="bg-panel border border-edge rounded-xl p-4">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <div class="font-medium">{{ g.name }}</div>
+            <div class="text-xs text-muted">
+              {{ g.slug }} · {{ g.kind || '—' }} · {{ g.n_books ?? 0 }} Bücher
+            </div>
+          </div>
+          <div class="flex gap-2 text-sm">
+            <button class="text-accent hover:underline" (click)="toggleBooks(g)">Bücher</button>
+            <button class="text-accent hover:underline" (click)="openUpload(g)">Upload</button>
+            <button class="text-red-400 hover:underline" (click)="deleteGroup(g)">Löschen</button>
+          </div>
+        </div>
+
+        <!-- Bücher -->
+        @if (expandedGroupId() === g.id) {
+          <div class="mt-3 border-t border-edge pt-3 flex flex-col gap-1.5">
+            @for (b of books(); track b.id) {
+              <div class="flex items-center justify-between text-sm">
+                <span>{{ b.title || b.book_key }} — {{ b.author || '—' }} · {{ b.n_chunks }} Chunks</span>
+                <button class="text-red-400 hover:underline text-xs" (click)="deleteBook(b, g)">entfernen</button>
+              </div>
+            } @empty {
+              <div class="text-xs text-muted">Noch keine Bücher.</div>
+            }
+          </div>
+        }
+
+        <!-- Upload-Panel -->
+        @if (uploadGroupId() === g.id) {
+          <div class="mt-3 border-t border-edge pt-3 flex flex-col gap-2">
+            <input type="file" accept=".txt" class="text-sm" (change)="onFile($event)" />
+            <div class="flex gap-2">
+              <button
+                class="bg-panel2 border border-edge rounded-lg px-3 py-1 text-sm disabled:opacity-50"
+                (click)="dryRun(g)"
+                [disabled]="!file() || busy()"
+              >
+                Prüfen (Dry-Run)
+              </button>
+              <button
+                class="bg-accent text-[#0b1020] font-semibold rounded-lg px-3 py-1 text-sm disabled:opacity-50"
+                (click)="commit(g)"
+                [disabled]="!file() || busy()"
+              >
+                Übernehmen (Commit)
+              </button>
+              @if (busy()) {
+                <span class="text-xs text-muted self-center">läuft…</span>
+              }
+            </div>
+
+            @if (report(); as r) {
+              <div class="bg-panel2 border border-edge rounded-lg p-3 text-xs text-muted">
+                <div class="text-ink">
+                  Cleaning-Report — Titel: {{ r.title || '?' }}, Autor: {{ r.author || '?' }}
+                </div>
+                <div>
+                  bereinigte Zeichen: {{ r.report.cleaned_chars }} · gemergte Zeilen:
+                  {{ r.report.lines_merged }} · Verlust: {{ r.report.dropped_ratio }}
+                </div>
+                @if (r.report.warnings?.length) {
+                  <div class="text-amber-400">⚠ {{ r.report.warnings.join('; ') }}</div>
+                }
+                <div class="mt-1 italic">„{{ r.report.after_sample }}…"</div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    } @empty {
+      <div class="text-sm text-muted">Noch keine Gruppen — oben eine anlegen.</div>
+    }
+  </div>
+</div>
