@@ -121,12 +121,31 @@ export class ChatComponent implements OnDestroy {
   readonly modelMenuOpen = signal(false);
 
   toggleModelMenu(): void {
+    this.groupMenuOpen.set(false);
     this.modelMenuOpen.update((open) => !open);
   }
 
   selectModel(model: string): void {
     this.selectedModel.set(model);
     this.modelMenuOpen.set(false);
+  }
+
+  /** Gruppen-Menü im selben Stil; '' = alle Gruppen. */
+  readonly groupMenuOpen = signal(false);
+  readonly selectedGroupLabel = computed(() => {
+    const slug = this.selectedGroup();
+    if (!slug) return 'Alle Gruppen';
+    return this.groups().find((g) => g.slug === slug)?.name ?? slug;
+  });
+
+  toggleGroupMenu(): void {
+    this.modelMenuOpen.set(false);
+    this.groupMenuOpen.update((open) => !open);
+  }
+
+  selectGroup(slug: string): void {
+    this.selectedGroup.set(slug);
+    this.groupMenuOpen.set(false);
   }
 
   /** Eingeklappte Gruppen in der Sidebar (Key = group-slug, '' = „Ohne Gruppe"). */
