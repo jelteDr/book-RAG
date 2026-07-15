@@ -40,3 +40,15 @@ body {
   @apply bg-bg text-ink;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
+/* Formular-Elemente erben die Schrift NICHT automatisch (Browser-Default) —
+   ohne das wirken Buttons/Inputs/Selects/Textareas wie ein anderer Schrifttyp. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
