@@ -1,6 +1,7 @@
 # --- Daten & Modelle: NIEMALS committen (Urheberrecht + Größe) ---
-data/
-models/
+# Am Repo-Root verankert (/), sonst würde z. B. frontend/src/app/models/ mitverschluckt.
+/data/
+/models/
 *.gguf
 *.bin
 
