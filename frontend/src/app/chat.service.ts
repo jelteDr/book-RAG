@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-import { ChatEvent, ChatRequest, ModelsResponse } from './models';
+import { ChatEvent, ChatRequest, Conversation, ConversationDetail, ModelsResponse } from './models';
 
 /** Kapselt die HTTP-/SSE-Kommunikation mit dem Backend (via /api-Proxy). */
 @Injectable({ providedIn: 'root' })
@@ -9,6 +9,21 @@ export class ChatService {
     const resp = await fetch('/api/models');
     if (!resp.ok) throw new Error(`/api/models: ${resp.status}`);
     return resp.json();
+  }
+
+  async getConversations(): Promise<Conversation[]> {
+    const resp = await fetch('/api/conversations');
+    return resp.ok ? resp.json() : [];
+  }
+
+  async getConversation(id: number): Promise<ConversationDetail> {
+    const resp = await fetch(`/api/conversations/${id}`);
+    if (!resp.ok) throw new Error(`/api/conversations/${id}: ${resp.status}`);
+    return resp.json();
+  }
+
+  async deleteConversation(id: number): Promise<void> {
+    await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
   }
 
   /** Streamt die Antwort als Folge von ChatEvents (Token, dann done bzw. error). */

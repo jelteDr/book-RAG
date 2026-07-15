@@ -25,6 +25,20 @@
         }
       </select>
     </label>
+    <label class="flex items-center gap-2">
+      Unterhaltung
+      <select
+        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 max-w-[160px]"
+        [ngModel]="currentConversationId() ?? ''"
+        (ngModelChange)="onSelectConversation($event)"
+      >
+        <option value="">Neu</option>
+        @for (c of conversations(); track c.id) {
+          <option [value]="c.id">{{ c.title }}</option>
+        }
+      </select>
+    </label>
+    <button class="text-sm text-accent hover:underline" (click)="newChat()">＋ Neu</button>
   </div>
 
   <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">

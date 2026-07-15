@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 
 import { ChatService } from '../chat.service';
 import { LibraryService } from '../library.service';
-import { Group, Message, Source } from '../models';
+import { Conversation, Group, Message, Source } from '../models';
 
 interface Segment {
   text: string;
@@ -25,6 +25,8 @@ export class ChatComponent {
   readonly selectedModel = signal('');
   readonly groups = signal<Group[]>([]);
   readonly selectedGroup = signal('');
+  readonly conversations = signal<Conversation[]>([]);
+  readonly currentConversationId = signal<number | null>(null);
   readonly question = signal('');
   readonly messages = signal<Message[]>([]);
   readonly draft = signal('');
@@ -50,6 +52,42 @@ export class ChatComponent {
       this.groups.set(await this.library.listGroups());
     } catch {
       this.groups.set([]);
+    }
+    await this.refreshConversations();
+  }
+
+  private async refreshConversations(): Promise<void> {
+    try {
+      this.conversations.set(await this.chat.getConversations());
+    } catch {
+      this.conversations.set([]);
+    }
+  }
+
+  newChat(): void {
+    this.currentConversationId.set(null);
+    this.messages.set([]);
+    this.expanded.set(null);
+  }
+
+  onSelectConversation(value: string): void {
+    if (!value) {
+      this.newChat();
+    } else {
+      void this.loadConversation(Number(value));
+    }
+  }
+
+  async loadConversation(id: number): Promise<void> {
+    try {
+      const conv = await this.chat.getConversation(id);
+      this.currentConversationId.set(id);
+      this.messages.set(
+        conv.messages.map((m) => ({ role: m.role, text: m.content, sources: m.sources })),
+      );
+      this.expanded.set(null);
+    } catch {
+      /* ignore */
     }
   }
 
@@ -98,11 +136,13 @@ export class ChatComponent {
         question,
         model: this.selectedModel() || null,
         group_id: this.selectedGroup() || null,
+        conversation_id: this.currentConversationId(),
       };
       for await (const ev of this.chat.stream(request)) {
         if (ev.event === 'token') {
           this.draft.update((d) => d + (ev.data.content ?? ''));
         } else if (ev.event === 'done') {
+          if (ev.data.conversation_id) this.currentConversationId.set(ev.data.conversation_id);
           this.finish({
             role: 'assistant',
             text: this.draft(),
@@ -123,6 +163,7 @@ export class ChatComponent {
     } finally {
       this.streaming.set(false);
       this.draft.set('');
+      void this.refreshConversations();
     }
   }
 

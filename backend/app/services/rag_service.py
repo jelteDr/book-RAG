@@ -11,11 +11,14 @@ import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
+from datetime import datetime
 
 from app.clients.ollama_client import OllamaClient
 from app.clients.qdrant_client import VectorStore
 from app.config import Settings
-from app.db.models import QueryLog
+from sqlmodel import col, select
+
+from app.db.models import ChatMessage, Conversation, QueryLog
 from app.rag.citations import extract_citations, sources_overview
 from app.rag.prompt_builder import build_messages
 from app.rag.retriever import retrieve
@@ -43,18 +46,29 @@ class RagService:
 
     async def answer(
         self, question: str, *, model: str | None = None, group_id: str | None = None,
-        top_k: int | None = None,
+        top_k: int | None = None, conversation_id: int | None = None,
     ) -> AsyncIterator[Event]:
         """Liefert nacheinander ('token'|'done'|'error', payload)-Events."""
         model = model or self._settings.chat_model
         top_k = top_k or self._settings.top_k
         t_start = time.perf_counter()
 
+        # Unterhaltung sicherstellen + Nutzer-Nachricht speichern; prior History holen.
+        conversation_id, history = await self._ensure_conversation(
+            conversation_id, question, group_id
+        )
+
+        # History-aware: Folgefrage zu eigenständiger Suchanfrage umschreiben (Retrieval),
+        # der Verlauf selbst geht begrenzt in die Generierung (build_messages).
+        retrieval_query = question
+        if history:
+            retrieval_query = await self._condense(question, history, model)
+
         rerank = self._reranker is not None and self._reranker.active
         fetch_k = self._settings.rerank_candidates if rerank else top_k
         try:
             points = await retrieve(
-                question, ollama=self._ollama, vectors=self._vectors,
+                retrieval_query, ollama=self._ollama, vectors=self._vectors,
                 embed_model=self._settings.embed_model, top_k=fetch_k, group_id=group_id,
             )
         except Exception as exc:  # Ollama/Qdrant nicht erreichbar
@@ -68,9 +82,11 @@ class RagService:
             points = points[:top_k]
 
         if not points:
-            done = {"model": model, "sources": [], "retrieved": []}
+            msg = "Dazu finde ich in den Quellen nichts."
+            done = {"model": model, "sources": [], "retrieved": [], "conversation_id": conversation_id}
             await self._log_query(question, model, group_id, done)
-            yield "token", {"content": "Dazu finde ich in den Quellen nichts."}
+            await self._save_assistant(conversation_id, msg, model, [])
+            yield "token", {"content": msg}
             yield "done", done
             return
 
@@ -79,7 +95,7 @@ class RagService:
         usage: dict = {}
         try:
             async for delta, usage_chunk in self._stream_deltas(
-                build_messages(question, points), model
+                build_messages(question, points, history), model
             ):
                 if usage_chunk:
                     usage = usage_chunk
@@ -104,6 +120,7 @@ class RagService:
             "usage": usage,
             "sources": extract_citations(answer, points),
             "retrieved": sources_overview(points),
+            "conversation_id": conversation_id,
         }
         # Optional: ungestützte Zitate via NLI markieren (blockierend -> Thread).
         if self._faithfulness is not None and self._faithfulness.active and done["sources"]:
@@ -111,7 +128,92 @@ class RagService:
                 self._faithfulness.check, answer, done["sources"]
             )
         await self._log_query(question, model, group_id, done)
+        await self._save_assistant(conversation_id, answer, model, done["sources"])
         yield "done", done
+
+    async def _ensure_conversation(
+        self, conversation_id: int | None, question: str, group_id: str | None
+    ) -> tuple[int | None, list[dict]]:
+        """Legt bei Bedarf eine Unterhaltung an, speichert die Nutzer-Nachricht und
+        liefert den bisherigen Verlauf (vor dieser Frage) zurück."""
+        if self._session_factory is None:
+            return conversation_id, []
+        history: list[dict] = []
+        try:
+            async with self._session_factory() as session:
+                if conversation_id is None:
+                    conv = Conversation(title=question[:80], group_id=group_id)
+                    session.add(conv)
+                    await session.commit()
+                    await session.refresh(conv)
+                    conversation_id = conv.id
+                else:
+                    prior = (
+                        await session.exec(
+                            select(ChatMessage)
+                            .where(ChatMessage.conversation_id == conversation_id)
+                            .order_by(col(ChatMessage.id))
+                        )
+                    ).all()
+                    history = [{"role": m.role, "content": m.content} for m in prior]
+                    conv = await session.get(Conversation, conversation_id)
+                    if conv:
+                        conv.updated_at = datetime.utcnow()
+                        session.add(conv)
+                session.add(ChatMessage(conversation_id=conversation_id, role="user", content=question))
+                await session.commit()
+            return conversation_id, history
+        except Exception:
+            return conversation_id, history
+
+    async def _condense(self, question: str, history: list[dict], model: str) -> str:
+        """Schreibt eine Folgefrage anhand des Verlaufs zu einer eigenständigen Suchanfrage um."""
+        hist_txt = "\n".join(f"{m['role']}: {m['content']}" for m in history[-6:])
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Formuliere die letzte Nutzerfrage zu einer eigenständigen, kontextfreien "
+                    "Suchanfrage um (nutze den Verlauf, um Bezüge wie 'er'/'das' aufzulösen). "
+                    "Gib NUR die umformulierte Frage aus, ohne Erklärung."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Verlauf:\n{hist_txt}\n\nLetzte Frage: {question}\n\nEigenständige Suchanfrage:",
+            },
+        ]
+        try:
+            out = await self._ollama.complete(messages, model, temperature=0.0, max_tokens=80)
+            return out.strip() or question
+        except Exception:
+            return question
+
+    async def _save_assistant(
+        self, conversation_id: int | None, answer: str, model: str, sources: list[dict]
+    ) -> None:
+        """Speichert die Assistenten-Antwort (leichte Quell-Liste, kein Chunk-Text)."""
+        if self._session_factory is None or conversation_id is None:
+            return
+        light = [
+            {
+                "marker": s.get("marker"), "chapter": s.get("chapter"),
+                "score": s.get("score"), "book_title": s.get("book_title"),
+                "supported": s.get("supported"),
+            }
+            for s in sources
+        ]
+        try:
+            async with self._session_factory() as session:
+                session.add(
+                    ChatMessage(
+                        conversation_id=conversation_id, role="assistant",
+                        content=answer, model=model, sources=light,
+                    )
+                )
+                await session.commit()
+        except Exception:
+            pass
 
     async def _log_query(self, question: str, model: str, group_id: str | None, done: dict) -> None:
         """Schreibt eine query_log-Zeile (best-effort — darf die Antwort nie brechen)."""
