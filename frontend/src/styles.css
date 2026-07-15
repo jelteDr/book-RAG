@@ -2,7 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Light (Default) */
 :root {
+  --c-bg: #f7f8fa;
+  --c-panel: #ffffff;
+  --c-panel2: #eef1f5;
+  --c-ink: #1a1d23;
+  --c-muted: #5b6472;
+  --c-accent: #2563eb;
+  --c-on-accent: #ffffff;
+  --c-userbubble: #dbeafe;
+  --c-edge: #d7dce3;
+  color-scheme: light;
+}
+
+/* Dark */
+.dark {
+  --c-bg: #0f1115;
+  --c-panel: #171a21;
+  --c-panel2: #1e222b;
+  --c-ink: #e6e8ec;
+  --c-muted: #9aa3b2;
+  --c-accent: #6ea8fe;
+  --c-on-accent: #0b1020;
+  --c-userbubble: #24405f;
+  --c-edge: #2a2f3a;
   color-scheme: dark;
 }
 

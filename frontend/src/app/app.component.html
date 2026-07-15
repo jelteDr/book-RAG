@@ -25,6 +25,13 @@
       class="text-sm text-muted hover:text-ink"
       >Dashboard</a
     >
+    <button
+      class="ml-auto text-sm text-muted hover:text-ink border border-edge rounded-md px-2 py-1"
+      (click)="theme.toggle()"
+      [title]="theme.theme() === 'dark' ? 'Zu Light-Mode wechseln' : 'Zu Dark-Mode wechseln'"
+    >
+      {{ theme.theme() === 'dark' ? '☀︎ Light' : '☾ Dark' }}
+    </button>
   </nav>
   <main class="flex-1 min-h-0">
     <router-outlet></router-outlet>
