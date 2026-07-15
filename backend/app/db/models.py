@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger
+from sqlalchemy import JSON, BigInteger, Column
 from sqlmodel import Field, SQLModel
 
 
@@ -52,6 +52,33 @@ class Book(SQLModel, table=True):
     n_chunks: int = 0
     status: str = "committed"                      # pending | committed | failed
     file_hash: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Conversation(SQLModel, table=True):
+    """Eine gespeicherte Unterhaltung."""
+
+    __tablename__ = "conversations"
+
+    id: int | None = Field(default=None, primary_key=True)
+    title: str
+    group_id: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ChatMessage(SQLModel, table=True):
+    """Eine Nachricht (user/assistant) innerhalb einer Unterhaltung."""
+
+    __tablename__ = "chat_messages"
+
+    id: int | None = Field(default=None, primary_key=True)
+    conversation_id: int = Field(foreign_key="conversations.id", index=True)
+    role: str  # "user" | "assistant"
+    content: str
+    model: str | None = None
+    # Leichte Quell-Liste (marker/chapter/score/…), ohne vollen Chunk-Text.
+    sources: list | None = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

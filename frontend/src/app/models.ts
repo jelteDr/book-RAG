@@ -31,6 +31,21 @@ export interface ChatRequest {
   question: string;
   model: string | null;
   group_id: string | null;
+  conversation_id?: number | null;
+}
+
+export interface Conversation {
+  id: number;
+  title: string;
+  group_id: string | null;
+  updated_at: string;
+}
+
+export interface ConversationDetail {
+  id: number;
+  title: string;
+  group_id: string | null;
+  messages: { role: 'user' | 'assistant'; content: string; model: string | null; sources: Source[] }[];
 }
 
 export interface ModelsResponse {
@@ -105,5 +120,6 @@ export interface ChatEvent {
     e2e_ms?: number;
     tps?: number;
     message?: string;
+    conversation_id?: number;
   };
 }
