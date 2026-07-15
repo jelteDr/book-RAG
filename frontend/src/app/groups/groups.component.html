@@ -79,6 +79,20 @@
         @if (uploadGroupId() === g.id) {
           <div class="mt-3 border-t border-edge pt-3 flex flex-col gap-2">
             <input type="file" accept=".txt" class="text-sm" (change)="onFile($event)" />
+            <div class="flex flex-wrap gap-2">
+              <input
+                class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 text-sm w-52"
+                [ngModel]="uploadTitle()"
+                (ngModelChange)="uploadTitle.set($event)"
+                placeholder="Titel (optional, sonst Dateiname)"
+              />
+              <input
+                class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 text-sm w-52"
+                [ngModel]="uploadAuthor()"
+                (ngModelChange)="uploadAuthor.set($event)"
+                placeholder="Autor (optional)"
+              />
+            </div>
             <div class="flex gap-2">
               <button
                 class="bg-panel2 border border-edge rounded-lg px-3 py-1 text-sm disabled:opacity-50"

@@ -25,6 +25,8 @@ export class GroupsComponent {
   // Upload-Panel
   readonly uploadGroupId = signal<number | null>(null);
   readonly file = signal<File | null>(null);
+  readonly uploadTitle = signal('');
+  readonly uploadAuthor = signal('');
   readonly report = signal<UploadResult | null>(null);
   readonly busy = signal(false);
 
@@ -85,7 +87,17 @@ export class GroupsComponent {
   openUpload(group: Group): void {
     this.uploadGroupId.set(group.id);
     this.file.set(null);
+    this.uploadTitle.set('');
+    this.uploadAuthor.set('');
     this.report.set(null);
+  }
+
+  private uploadOpts(commit: boolean): { commit: boolean; title?: string; author?: string } {
+    return {
+      commit,
+      title: this.uploadTitle().trim() || undefined,
+      author: this.uploadAuthor().trim() || undefined,
+    };
   }
 
   onFile(event: Event): void {
@@ -99,7 +111,7 @@ export class GroupsComponent {
     if (!f) return;
     this.busy.set(true);
     try {
-      this.report.set(await this.library.upload(group.id, f, { commit: false }));
+      this.report.set(await this.library.upload(group.id, f, this.uploadOpts(false)));
     } catch (e) {
       this.error.set(`Dry-Run fehlgeschlagen: ${e}`);
     } finally {
@@ -112,7 +124,7 @@ export class GroupsComponent {
     if (!f) return;
     this.busy.set(true);
     try {
-      await this.library.upload(group.id, f, { commit: true });
+      await this.library.upload(group.id, f, this.uploadOpts(true));
       this.uploadGroupId.set(null);
       this.file.set(null);
       this.report.set(null);
