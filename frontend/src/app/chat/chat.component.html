@@ -1,0 +1,118 @@
+<div class="flex flex-col h-full max-w-3xl mx-auto w-full">
+  <div class="flex flex-wrap gap-4 px-4 py-3 border-b border-edge text-sm text-muted items-center">
+    <label class="flex items-center gap-2">
+      Modell
+      <select
+        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1"
+        [ngModel]="selectedModel()"
+        (ngModelChange)="selectedModel.set($event)"
+      >
+        @for (m of models(); track m) {
+          <option [value]="m">{{ m }}</option>
+        }
+      </select>
+    </label>
+    <label class="flex items-center gap-2">
+      Gruppe
+      <select
+        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1"
+        [ngModel]="selectedGroup()"
+        (ngModelChange)="selectedGroup.set($event)"
+      >
+        <option value="">(alle)</option>
+        @for (g of groups(); track g.id) {
+          <option [value]="g.slug">{{ g.name }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+    @for (msg of messages(); track $index) {
+      <div class="flex" [class.justify-end]="msg.role === 'user'">
+        <div
+          class="rounded-xl px-4 py-2.5 max-w-[90%] leading-relaxed whitespace-pre-wrap border border-edge"
+          [class.bg-userbubble]="msg.role === 'user'"
+          [class.bg-panel]="msg.role !== 'user'"
+        >
+          @if (msg.role === 'assistant') {
+            @for (seg of segments(msg.text); track $index) {
+              @if (seg.marker !== null) {
+                <a
+                  class="text-accent font-semibold cursor-pointer hover:underline"
+                  (click)="onCite(msg, seg.marker)"
+                  >{{ seg.text }}</a
+                >
+              } @else {
+                <span>{{ seg.text }}</span>
+              }
+            }
+            @if (msg.error) {
+              <span class="text-red-400">{{ msg.error }}</span>
+            }
+
+            @if (msg.sources?.length) {
+              <div class="mt-2.5 flex flex-wrap gap-1.5 items-center">
+                <span class="text-xs text-muted">Quellen:</span>
+                @for (s of msg.sources; track s.marker) {
+                  <button
+                    class="rounded-full border px-2.5 py-0.5 text-xs bg-panel2"
+                    [class.border-accent]="expanded() === s"
+                    [class.text-accent]="expanded() === s"
+                    [class.border-edge]="expanded() !== s"
+                    (click)="toggleSource(s)"
+                  >
+                    [{{ s.marker }}] {{ s.chapter }} · {{ s.score }}
+                  </button>
+                }
+              </div>
+            }
+            @if (expanded(); as ex) {
+              @if (msg.sources?.includes(ex)) {
+                <div class="mt-2 bg-panel2 border-l-2 border-accent rounded-md px-3 py-2 text-[13px]">
+                  <strong>[{{ ex.marker }}] {{ ex.book_title }} — {{ ex.chapter }}</strong>
+                  <p class="mt-1.5 text-muted max-h-44 overflow-y-auto">{{ ex.text }}</p>
+                </div>
+              }
+            }
+            @if (msg.meta) {
+              <div class="mt-2 text-[11px] text-muted">
+                {{ msg.meta.model }} · TTFT {{ msg.meta.ttft_ms }} ms · {{ msg.meta.e2e_ms }} ms ·
+                {{ msg.meta.tps }} tok/s
+              </div>
+            }
+          } @else {
+            {{ msg.text }}
+          }
+        </div>
+      </div>
+    }
+    @if (streaming()) {
+      <div class="flex">
+        <div
+          class="rounded-xl px-4 py-2.5 max-w-[90%] leading-relaxed whitespace-pre-wrap border border-edge bg-panel"
+        >
+          {{ draft() }}<span class="opacity-50">▊</span>
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="flex gap-2 px-4 py-3 border-t border-edge">
+    <textarea
+      class="flex-1 resize-none bg-panel2 text-ink border border-edge rounded-lg p-2"
+      [ngModel]="question()"
+      (ngModelChange)="question.set($event)"
+      (keydown.enter)="onEnter($event)"
+      placeholder="Frage zum Buch stellen…"
+      rows="2"
+    ></textarea>
+    <button
+      class="bg-accent text-[#0b1020] font-semibold rounded-lg px-4 disabled:opacity-50"
+      (click)="send()"
+      [disabled]="streaming() || !question().trim()"
+    >
+      Senden
+    </button>
+  </div>
+</div>
