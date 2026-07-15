@@ -14,33 +14,45 @@
     <div class="flex-1 overflow-y-auto p-2 flex flex-col gap-3">
       @for (grp of groupedConversations(); track grp.key) {
         <div>
-          <div class="flex items-center justify-between px-1 mb-1">
-            <span class="text-[11px] uppercase tracking-wide text-muted truncate">{{ grp.label }}</span>
+          <div
+            class="flex items-center justify-between px-1 mb-1 cursor-pointer select-none"
+            (click)="toggleGroup(grp.key)"
+            [title]="isCollapsed(grp.key) ? 'Ausklappen' : 'Einklappen'"
+          >
+            <span class="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted truncate">
+              <span class="text-[9px] w-2 shrink-0">{{ isCollapsed(grp.key) ? '▸' : '▾' }}</span>
+              {{ grp.label }}
+              @if (isCollapsed(grp.key)) {
+                <span class="normal-case tracking-normal">({{ grp.items.length }})</span>
+              }
+            </span>
             @if (grp.key) {
               <button
                 class="text-accent hover:opacity-80 text-base leading-none px-1 shrink-0"
-                (click)="newChatInGroup(grp.key)"
+                (click)="newChatInGroup(grp.key); $event.stopPropagation()"
                 title="Neuer Chat in dieser Gruppe"
               >
                 ＋
               </button>
             }
           </div>
-          @for (c of grp.items; track c.id) {
-            <div
-              class="flex items-center justify-between gap-1 rounded-md px-2 py-1 cursor-pointer hover:bg-panel2"
-              [class.bg-panel2]="currentConversationId() === c.id"
-              (click)="loadConversation(c.id)"
-            >
-              <span class="text-sm truncate">{{ c.title }}</span>
-              <button
-                class="text-muted hover:text-red-400 text-sm leading-none px-1"
-                (click)="deleteConversation(c, $event)"
-                title="Chat löschen"
+          @if (!isCollapsed(grp.key)) {
+            @for (c of grp.items; track c.id) {
+              <div
+                class="flex items-center justify-between gap-1 rounded-md px-2 py-1 cursor-pointer hover:bg-panel2"
+                [class.bg-panel2]="currentConversationId() === c.id"
+                (click)="loadConversation(c.id)"
               >
-                −
-              </button>
-            </div>
+                <span class="text-sm truncate">{{ c.title }}</span>
+                <button
+                  class="text-muted hover:text-red-400 text-sm leading-none px-1"
+                  (click)="deleteConversation(c, $event)"
+                  title="Chat löschen"
+                >
+                  −
+                </button>
+              </div>
+            }
           }
         </div>
       } @empty {

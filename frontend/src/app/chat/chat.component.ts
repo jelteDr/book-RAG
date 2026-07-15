@@ -117,6 +117,25 @@ export class ChatComponent implements OnDestroy {
     this.newChat();
   }
 
+  /** Eingeklappte Gruppen in der Sidebar (Key = group-slug, '' = „Ohne Gruppe"). */
+  readonly collapsedGroups = signal<Set<string>>(new Set());
+
+  toggleGroup(key: string): void {
+    this.collapsedGroups.update((set) => {
+      const next = new Set(set);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  isCollapsed(key: string): boolean {
+    return this.collapsedGroups().has(key);
+  }
+
   private startThinking(): void {
     this.thinkingIndex.set(0);
     this.stopThinking();
