@@ -1,0 +1,51 @@
+<div class="max-w-4xl mx-auto w-full px-4 py-6 flex flex-col gap-4 overflow-y-auto h-full">
+  <div class="flex items-baseline justify-between">
+    <h2 class="text-lg font-semibold">Dashboard</h2>
+    <span class="text-xs text-muted">{{ totalQueries() }} Anfragen gesamt</span>
+  </div>
+
+  @if (error()) {
+    <div class="text-red-400 text-sm">{{ error() }}</div>
+  }
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    @for (c of cards(); track c.info.name) {
+      <div class="bg-panel border border-edge rounded-xl p-4 flex flex-col gap-3">
+        <div>
+          <div class="font-medium">{{ c.info.name }}</div>
+          <div class="text-xs text-muted">
+            {{ c.info.parameter_size || '?' }} · {{ c.info.quantization || '?' }} ·
+            Kontext {{ c.info.context_length || '?' }} ·
+            Cutoff {{ c.info.cutoff_date || '—' }}
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div class="bg-panel2 rounded-lg py-2">
+            <div class="text-lg font-semibold">{{ c.metric?.queries ?? 0 }}</div>
+            <div class="text-[11px] text-muted">Anfragen</div>
+          </div>
+          <div class="bg-panel2 rounded-lg py-2">
+            <div class="text-lg font-semibold">{{ c.metric?.avg_ttft_ms ?? '—' }}</div>
+            <div class="text-[11px] text-muted">Ø TTFT (ms)</div>
+          </div>
+          <div class="bg-panel2 rounded-lg py-2">
+            <div class="text-lg font-semibold">{{ c.metric?.avg_tps ?? '—' }}</div>
+            <div class="text-[11px] text-muted">Ø TPS</div>
+          </div>
+        </div>
+        @if (c.metric?.avg_completion_tokens) {
+          <div class="text-[11px] text-muted">
+            Ø Antwort-Tokens: {{ c.metric?.avg_completion_tokens }}
+          </div>
+        }
+      </div>
+    } @empty {
+      <div class="text-sm text-muted">Noch keine Modelle/Metriken — im Chat eine Frage stellen.</div>
+    }
+  </div>
+
+  <p class="text-xs text-muted">
+    Live-Telemetrie aus dem query_log (deskriptiv, kein kontrollierter Benchmark). Cutoff-Datum
+    wird unter „Modelle" kuratiert.
+  </p>
+</div>
