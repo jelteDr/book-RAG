@@ -38,7 +38,7 @@
       />
     </label>
     <button
-      class="bg-accent text-[#0b1020] font-semibold rounded-lg px-4 py-1.5 disabled:opacity-50"
+      class="bg-accent text-onaccent font-semibold rounded-lg px-4 py-1.5 disabled:opacity-50"
       (click)="createGroup()"
       [disabled]="!slug().trim() || !name().trim()"
     >
@@ -88,7 +88,7 @@
                 Prüfen (Dry-Run)
               </button>
               <button
-                class="bg-accent text-[#0b1020] font-semibold rounded-lg px-3 py-1 text-sm disabled:opacity-50"
+                class="bg-accent text-onaccent font-semibold rounded-lg px-3 py-1 text-sm disabled:opacity-50"
                 (click)="commit(g)"
                 [disabled]="!file() || busy()"
               >
