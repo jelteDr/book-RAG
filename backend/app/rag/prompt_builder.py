@@ -11,10 +11,12 @@ _SYSTEM = (
     "bereitgestellten, nummerierten Quellen beantwortet. Regeln:\n"
     "1. Setze hinter JEDE Aussage direkt den Marker der Quelle, aus der sie stammt, "
     "z. B.: 'Harker reist nach Transsilvanien [1].'\n"
-    "2. Nutze NUR die vorhandenen Nummern [1..k] — erfinde weder Nummern noch Fakten.\n"
-    "3. Belege jede Aussage; was du nicht aus den Quellen belegen kannst, lässt du weg.\n"
-    "4. Reichen die Quellen nicht, sage das ehrlich ('Dazu steht in den Quellen nichts.').\n"
-    "5. Hänge KEINE separate Quellenliste an — die Marker im Fließtext genügen."
+    "2. Nutze NUR die vorhandenen Nummern [1..k] — erfinde weder Nummern noch Fakten. "
+    "Schreibe NIEMALS das Zeichen '[n]' wörtlich, sondern immer die konkrete Zahl (z. B. [2]).\n"
+    "3. Antworte in EIGENEN WORTEN; zitiere nicht wörtlich und lange aus den Quellen.\n"
+    "4. Belege jede Aussage; was du nicht aus den Quellen belegen kannst, lässt du weg.\n"
+    "5. Reichen die Quellen nicht, sage das ehrlich ('Dazu steht in den Quellen nichts.').\n"
+    "6. Hänge KEINE separate Quellenliste an — die Marker im Fließtext genügen."
 )
 
 _MAX_HISTORY_TURNS = 4  # begrenztes Fenster: nur die letzten Turns für Kohärenz
@@ -47,7 +49,8 @@ def build_messages(
             "content": (
                 f"Quellen:\n{context}\n\n"
                 f"Frage: {question}\n\n"
-                "Antworte auf Deutsch und markiere jede Aussage mit der passenden Quelle [n]."
+                "Antworte auf Deutsch in eigenen Worten und setze hinter jede Aussage die "
+                "Nummer der genutzten Quelle in eckigen Klammern, z. B. [2]."
             ),
         }
     )

@@ -1,135 +1,165 @@
-<div class="flex flex-col h-full max-w-3xl mx-auto w-full">
-  <div class="flex flex-wrap gap-4 px-4 py-3 border-b border-edge text-sm text-muted items-center">
-    <label class="flex items-center gap-2">
-      Modell
-      <select
-        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1"
-        [ngModel]="selectedModel()"
-        (ngModelChange)="selectedModel.set($event)"
+<div class="flex h-full">
+  <!-- Sidebar: Chats, nach Gruppe gebündelt -->
+  <aside class="w-56 shrink-0 border-r border-edge flex flex-col">
+    <div class="flex items-center justify-between px-3 py-2 border-b border-edge">
+      <span class="font-semibold text-sm">Chats</span>
+      <button
+        class="text-lg leading-none text-accent hover:opacity-80"
+        (click)="newChat()"
+        title="Neuer Chat"
       >
-        @for (m of models(); track m) {
-          <option [value]="m">{{ m }}</option>
-        }
-      </select>
-    </label>
-    <label class="flex items-center gap-2">
-      Gruppe
-      <select
-        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1"
-        [ngModel]="selectedGroup()"
-        (ngModelChange)="selectedGroup.set($event)"
-      >
-        <option value="">(alle)</option>
-        @for (g of groups(); track g.id) {
-          <option [value]="g.slug">{{ g.name }}</option>
-        }
-      </select>
-    </label>
-    <label class="flex items-center gap-2">
-      Unterhaltung
-      <select
-        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 max-w-[160px]"
-        [ngModel]="currentConversationId() ?? ''"
-        (ngModelChange)="onSelectConversation($event)"
-      >
-        <option value="">Neu</option>
-        @for (c of conversations(); track c.id) {
-          <option [value]="c.id">{{ c.title }}</option>
-        }
-      </select>
-    </label>
-    <button class="text-sm text-accent hover:underline" (click)="newChat()">＋ Neu</button>
-  </div>
-
-  <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-    @for (msg of messages(); track $index) {
-      <div class="flex" [class.justify-end]="msg.role === 'user'">
-        <div
-          class="rounded-xl px-4 py-2.5 max-w-[90%] leading-relaxed whitespace-pre-wrap border border-edge"
-          [class.bg-userbubble]="msg.role === 'user'"
-          [class.bg-panel]="msg.role !== 'user'"
-        >
-          @if (msg.role === 'assistant') {
-            @for (seg of segments(msg.text); track $index) {
-              @if (seg.marker !== null) {
-                <a
-                  class="text-accent font-semibold cursor-pointer hover:underline"
-                  (click)="onCite(msg, seg.marker)"
-                  >{{ seg.text }}</a
-                >
-              } @else {
-                <span>{{ seg.text }}</span>
-              }
-            }
-            @if (msg.error) {
-              <span class="text-red-400">{{ msg.error }}</span>
-            }
-
-            @if (msg.sources?.length) {
-              <div class="mt-2.5 flex flex-wrap gap-1.5 items-center">
-                <span class="text-xs text-muted">Quellen:</span>
-                @for (s of msg.sources; track s.marker) {
-                  <button
-                    class="rounded-full border px-2.5 py-0.5 text-xs bg-panel2"
-                    [class.border-accent]="expanded() === s && s.supported !== false"
-                    [class.text-accent]="expanded() === s && s.supported !== false"
-                    [class.border-amber-500]="s.supported === false"
-                    [class.text-amber-400]="s.supported === false"
-                    [class.border-edge]="expanded() !== s && s.supported !== false"
-                    [title]="s.supported === false ? 'Laut NLI nicht klar durch diese Quelle gestützt' : ''"
-                    (click)="toggleSource(s)"
-                  >
-                    [{{ s.marker }}] {{ s.chapter }} · {{ s.score }}{{ s.supported === false ? ' ⚠' : '' }}
-                  </button>
-                }
-              </div>
-            }
-            @if (expanded(); as ex) {
-              @if (msg.sources?.includes(ex)) {
-                <div class="mt-2 bg-panel2 border-l-2 border-accent rounded-md px-3 py-2 text-[13px]">
-                  <strong>[{{ ex.marker }}] {{ ex.book_title }} — {{ ex.chapter }}</strong>
-                  <p class="mt-1.5 text-muted max-h-44 overflow-y-auto">{{ ex.text }}</p>
-                </div>
-              }
-            }
-            @if (msg.meta) {
-              <div class="mt-2 text-[11px] text-muted">
-                {{ msg.meta.model }} · TTFT {{ msg.meta.ttft_ms }} ms · {{ msg.meta.e2e_ms }} ms ·
-                {{ msg.meta.tps }} tok/s
-              </div>
-            }
-          } @else {
-            {{ msg.text }}
+        ＋
+      </button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-2 flex flex-col gap-3">
+      @for (grp of groupedConversations(); track grp.key) {
+        <div>
+          <div class="text-[11px] uppercase tracking-wide text-muted px-1 mb-1">{{ grp.label }}</div>
+          @for (c of grp.items; track c.id) {
+            <div
+              class="flex items-center justify-between gap-1 rounded-md px-2 py-1 cursor-pointer hover:bg-panel2"
+              [class.bg-panel2]="currentConversationId() === c.id"
+              (click)="loadConversation(c.id)"
+            >
+              <span class="text-sm truncate">{{ c.title }}</span>
+              <button
+                class="text-muted hover:text-red-400 text-sm leading-none px-1"
+                (click)="deleteConversation(c, $event)"
+                title="Chat löschen"
+              >
+                −
+              </button>
+            </div>
           }
         </div>
-      </div>
-    }
-    @if (streaming()) {
-      <div class="flex">
-        <div
-          class="rounded-xl px-4 py-2.5 max-w-[90%] leading-relaxed whitespace-pre-wrap border border-edge bg-panel"
-        >
-          {{ draft() }}<span class="opacity-50">▊</span>
-        </div>
-      </div>
-    }
-  </div>
+      } @empty {
+        <div class="text-xs text-muted px-1">Noch keine Chats — ＋ für neuen Chat.</div>
+      }
+    </div>
+  </aside>
 
-  <div class="flex gap-2 px-4 py-3 border-t border-edge">
-    <textarea
-      class="flex-1 resize-none bg-panel2 text-ink border border-edge rounded-lg p-2"
-      [ngModel]="question()"
-      (ngModelChange)="question.set($event)"
-      (keydown.enter)="onEnter($event)"
-      placeholder="Frage zum Buch stellen…"
-      rows="2"
-    ></textarea>
-    <button
-      class="bg-accent text-onaccent font-semibold rounded-lg px-4 disabled:opacity-50"
-      (click)="send()"
-      [disabled]="streaming() || !question().trim()"
-    >
-      Senden
-    </button>
+  <!-- Hauptbereich -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      @for (msg of messages(); track $index) {
+        <div class="flex" [class.justify-end]="msg.role === 'user'">
+          <div
+            class="rounded-xl px-4 py-2.5 max-w-[90%] leading-relaxed whitespace-pre-wrap border border-edge"
+            [class.bg-userbubble]="msg.role === 'user'"
+            [class.bg-panel]="msg.role !== 'user'"
+          >
+            @if (msg.role === 'assistant') {
+              @for (seg of segments(msg.text); track $index) {
+                @if (seg.marker !== null) {
+                  <a
+                    class="text-accent font-semibold cursor-pointer hover:underline"
+                    (click)="onCite(msg, seg.marker)"
+                    >{{ seg.text }}</a
+                  >
+                } @else {
+                  <span>{{ seg.text }}</span>
+                }
+              }
+              @if (msg.error) {
+                <span class="text-red-400">{{ msg.error }}</span>
+              }
+
+              @if (msg.sources?.length) {
+                <div class="mt-2.5 flex flex-wrap gap-1.5 items-center">
+                  <span class="text-xs text-muted">Quellen:</span>
+                  @for (s of msg.sources; track s.marker) {
+                    <button
+                      class="rounded-full border px-2.5 py-0.5 text-xs bg-panel2"
+                      [class.border-accent]="expanded() === s && s.supported !== false"
+                      [class.text-accent]="expanded() === s && s.supported !== false"
+                      [class.border-amber-500]="s.supported === false"
+                      [class.text-amber-400]="s.supported === false"
+                      [class.border-edge]="expanded() !== s && s.supported !== false"
+                      [title]="s.supported === false ? 'Laut NLI nicht klar durch diese Quelle gestützt' : ''"
+                      (click)="toggleSource(s)"
+                    >
+                      [{{ s.marker }}] {{ s.chapter }} · {{ s.score }}{{ s.supported === false ? ' ⚠' : '' }}
+                    </button>
+                  }
+                </div>
+              }
+              @if (expanded(); as ex) {
+                @if (msg.sources?.includes(ex)) {
+                  <div class="mt-2 bg-panel2 border-l-2 border-accent rounded-md px-3 py-2 text-[13px]">
+                    <strong>[{{ ex.marker }}] {{ ex.book_title }} — {{ ex.chapter }}</strong>
+                    <p class="mt-1.5 text-muted max-h-44 overflow-y-auto">{{ ex.text }}</p>
+                  </div>
+                }
+              }
+              @if (msg.meta) {
+                <div class="mt-2 text-[11px] text-muted">
+                  {{ msg.meta.model }} · TTFT {{ msg.meta.ttft_ms }} ms · {{ msg.meta.e2e_ms }} ms ·
+                  {{ msg.meta.tps }} tok/s
+                </div>
+              }
+            } @else {
+              {{ msg.text }}
+            }
+          </div>
+        </div>
+      }
+      @if (streaming()) {
+        <div class="flex">
+          <div
+            class="rounded-xl px-4 py-2.5 max-w-[90%] leading-relaxed whitespace-pre-wrap border border-edge bg-panel"
+          >
+            {{ draft() }}<span class="opacity-50">▊</span>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Eingabe + Modell/Gruppe darunter -->
+    <div class="border-t border-edge px-4 py-3 flex flex-col gap-2">
+      <div class="flex gap-2">
+        <textarea
+          class="flex-1 resize-none bg-panel2 text-ink border border-edge rounded-lg p-2"
+          [ngModel]="question()"
+          (ngModelChange)="question.set($event)"
+          (keydown.enter)="onEnter($event)"
+          placeholder="Frage zum Buch stellen…"
+          rows="2"
+        ></textarea>
+        <button
+          class="bg-accent text-onaccent font-semibold rounded-lg px-4 disabled:opacity-50"
+          (click)="send()"
+          [disabled]="streaming() || !question().trim()"
+        >
+          Senden
+        </button>
+      </div>
+      <div class="flex flex-wrap gap-4 text-xs text-muted items-center">
+        <label class="flex items-center gap-1.5">
+          Modell
+          <select
+            class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1"
+            [ngModel]="selectedModel()"
+            (ngModelChange)="selectedModel.set($event)"
+          >
+            @for (m of models(); track m) {
+              <option [value]="m">{{ m }}</option>
+            }
+          </select>
+        </label>
+        <label class="flex items-center gap-1.5">
+          Gruppe
+          <select
+            class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1"
+            [ngModel]="selectedGroup()"
+            (ngModelChange)="selectedGroup.set($event)"
+          >
+            <option value="">(alle)</option>
+            @for (g of groups(); track g.id) {
+              <option [value]="g.slug">{{ g.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+    </div>
   </div>
 </div>
