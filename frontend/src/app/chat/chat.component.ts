@@ -117,6 +117,18 @@ export class ChatComponent implements OnDestroy {
     this.newChat();
   }
 
+  /** Modell-Menü (Claude-Code-Stil: nur Name sichtbar, Klick öffnet die Auswahl). */
+  readonly modelMenuOpen = signal(false);
+
+  toggleModelMenu(): void {
+    this.modelMenuOpen.update((open) => !open);
+  }
+
+  selectModel(model: string): void {
+    this.selectedModel.set(model);
+    this.modelMenuOpen.set(false);
+  }
+
   /** Eingeklappte Gruppen in der Sidebar (Key = group-slug, '' = „Ohne Gruppe"). */
   readonly collapsedGroups = signal<Set<string>>(new Set());
 

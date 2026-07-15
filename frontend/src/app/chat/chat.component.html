@@ -168,18 +168,40 @@
         </button>
       </div>
       <div class="flex flex-wrap gap-4 text-xs text-muted items-center">
-        <label class="flex items-center gap-1.5">
-          Modell
-          <select
-            class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1"
-            [ngModel]="selectedModel()"
-            (ngModelChange)="selectedModel.set($event)"
+        <!-- Modell-Auswahl im Claude-Code-Stil: nur der Name, Klick öffnet das Menü -->
+        <div class="relative">
+          <button
+            class="flex items-center gap-1 hover:text-ink"
+            (click)="toggleModelMenu()"
+            title="Modell wechseln"
           >
-            @for (m of models(); track m) {
-              <option [value]="m">{{ m }}</option>
-            }
-          </select>
-        </label>
+            <span>{{ selectedModel() || 'Modell wählen' }}</span>
+            <span class="text-[8px]">{{ modelMenuOpen() ? '▾' : '▴' }}</span>
+          </button>
+          @if (modelMenuOpen()) {
+            <!-- Unsichtbarer Backdrop: Klick daneben schließt das Menü -->
+            <div class="fixed inset-0 z-10" (click)="modelMenuOpen.set(false)"></div>
+            <div
+              class="absolute bottom-full left-0 mb-2 z-20 min-w-56 bg-panel border border-edge rounded-lg shadow-lg py-1"
+            >
+              @for (m of models(); track m) {
+                <button
+                  class="w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center justify-between gap-3"
+                  [class.text-accent]="m === selectedModel()"
+                  [class.text-ink]="m !== selectedModel()"
+                  (click)="selectModel(m)"
+                >
+                  <span class="truncate">{{ m }}</span>
+                  @if (m === selectedModel()) {
+                    <span class="shrink-0">✓</span>
+                  }
+                </button>
+              } @empty {
+                <div class="px-3 py-1.5 text-sm text-muted">Keine Modelle verfügbar</div>
+              }
+            </div>
+          }
+        </div>
         <label class="flex items-center gap-1.5">
           Gruppe
           <select
