@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { ChatService } from '../chat.service';
@@ -32,6 +32,24 @@ export class ChatComponent {
   readonly draft = signal('');
   readonly streaming = signal(false);
   readonly expanded = signal<Source | null>(null);
+
+  /** Unterhaltungen nach Gruppe gebündelt (für die Sidebar). */
+  readonly groupedConversations = computed(() => {
+    const nameBySlug = new Map(this.groups().map((g) => [g.slug, g.name]));
+    const buckets = new Map<string, { key: string; label: string; items: Conversation[] }>();
+    for (const c of this.conversations()) {
+      const key = c.group_id ?? '';
+      if (!buckets.has(key)) {
+        buckets.set(key, {
+          key,
+          label: key ? (nameBySlug.get(key) ?? key) : 'Ohne Gruppe',
+          items: [],
+        });
+      }
+      buckets.get(key)!.items.push(c);
+    }
+    return [...buckets.values()];
+  });
 
   constructor() {
     void this.load();
@@ -70,12 +88,11 @@ export class ChatComponent {
     this.expanded.set(null);
   }
 
-  onSelectConversation(value: string): void {
-    if (!value) {
-      this.newChat();
-    } else {
-      void this.loadConversation(Number(value));
-    }
+  async deleteConversation(conv: Conversation, event: Event): Promise<void> {
+    event.stopPropagation(); // nicht gleichzeitig laden
+    await this.chat.deleteConversation(conv.id);
+    if (this.currentConversationId() === conv.id) this.newChat();
+    await this.refreshConversations();
   }
 
   async loadConversation(id: number): Promise<void> {
