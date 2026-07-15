@@ -111,7 +111,11 @@ export class GroupsComponent {
     if (!f) return;
     this.busy.set(true);
     try {
-      this.report.set(await this.library.upload(group.id, f, this.uploadOpts(false)));
+      const res = await this.library.upload(group.id, f, this.uploadOpts(false));
+      this.report.set(res);
+      // Erkannten/Fallback-Titel vorbefüllen, damit man ihn sieht und korrigieren kann.
+      if (!this.uploadTitle() && res.title) this.uploadTitle.set(res.title);
+      if (!this.uploadAuthor() && res.author) this.uploadAuthor.set(res.author);
     } catch (e) {
       this.error.set(`Dry-Run fehlgeschlagen: ${e}`);
     } finally {
@@ -124,7 +128,12 @@ export class GroupsComponent {
     if (!f) return;
     this.busy.set(true);
     try {
-      await this.library.upload(group.id, f, this.uploadOpts(true));
+      const res = await this.library.upload(group.id, f, this.uploadOpts(true));
+      if (!res.committed) {
+        // Validierung fehlgeschlagen -> Report mit Fehlern zeigen, Panel offen lassen.
+        this.report.set(res);
+        return;
+      }
       this.uploadGroupId.set(null);
       this.file.set(null);
       this.report.set(null);

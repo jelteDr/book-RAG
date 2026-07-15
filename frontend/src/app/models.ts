@@ -97,6 +97,7 @@ export interface CleaningReport {
   lines_merged: number;
   dropped_ratio: number;
   warnings: string[];
+  validation_errors?: string[];
   before_sample: string;
   after_sample: string;
 }

@@ -16,6 +16,7 @@ from app.ingestion.chunker import chunk_book
 from app.ingestion.cleaner import clean
 from app.ingestion.parser import decode_bytes, parse_gutenberg, read_text
 from app.util import l2_normalize
+from app.validation import validate_document
 
 
 @dataclass
@@ -72,12 +73,18 @@ async def ingest_text(
     parsed = parse_gutenberg(raw_text)
     cleaned, report = clean(parsed.body)
 
+    # Validierung VOR dem Chunking: Länge + gültige Zeichen.
+    report_dict = report.as_dict()
+    errors = validate_document(cleaned)
+    report_dict["validation_errors"] = errors
+
     res_title = title or parsed.title
     res_author = author or parsed.author
 
-    if dry_run:
+    # Dry-Run ODER ungültig -> nicht chunken/embedden.
+    if dry_run or errors:
         return IngestResult(
-            book_id, group_id, res_title, res_author, parsed.language, 0, False, report.as_dict()
+            book_id, group_id, res_title, res_author, parsed.language, 0, False, report_dict
         )
 
     chunks = chunk_book(cleaned)
@@ -106,5 +113,5 @@ async def ingest_text(
     n = await vectors.upsert_chunks(points)
 
     return IngestResult(
-        book_id, group_id, res_title, res_author, parsed.language, n, True, report.as_dict()
+        book_id, group_id, res_title, res_author, parsed.language, n, True, report_dict
     )
