@@ -9,6 +9,7 @@ from app.clients.qdrant_client import VectorStore
 from app.config import settings
 from app.db.session import init_db, session_factory
 from app.routes import chat, groups, health, ingest, metrics, models
+from app.services.faithfulness_service import FaithfulnessService
 from app.services.model_registry import sync_models
 from app.services.rag_service import RagService
 from app.services.reranker_service import RerankerService
@@ -20,8 +21,12 @@ async def lifespan(app: FastAPI):
     app.state.ollama = OllamaClient(settings.ollama_base_url)
     app.state.vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     app.state.reranker = RerankerService(settings.reranker_model, settings.reranker_enabled)
+    app.state.faithfulness = FaithfulnessService(
+        settings.faithfulness_model, settings.faithfulness_check_enabled, settings.faithfulness_threshold
+    )
     app.state.rag = RagService(
-        app.state.ollama, app.state.vectors, settings, session_factory, app.state.reranker
+        app.state.ollama, app.state.vectors, settings, session_factory,
+        app.state.reranker, app.state.faithfulness,
     )
 
     # DB-Tabellen sicherstellen + Modell-Registry befüllen (best-effort).
