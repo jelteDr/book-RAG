@@ -28,17 +28,25 @@ export class GroupsComponent {
   readonly report = signal<UploadResult | null>(null);
   readonly busy = signal(false);
 
-  // Bücher-Ansicht
-  readonly expandedGroupId = signal<number | null>(null);
-  readonly books = signal<Book[]>([]);
+  // Bücher je Gruppe (immer sichtbar = Dokumentenverwaltung)
+  readonly booksByGroup = signal<Record<number, Book[]>>({});
 
   constructor() {
     void this.loadGroups();
   }
 
+  booksOf(groupId: number): Book[] {
+    return this.booksByGroup()[groupId] ?? [];
+  }
+
   private async loadGroups(): Promise<void> {
     try {
-      this.groups.set(await this.library.listGroups());
+      const groups = await this.library.listGroups();
+      this.groups.set(groups);
+      const entries = await Promise.all(
+        groups.map(async (g) => [g.id, await this.library.listBooks(g.id)] as const),
+      );
+      this.booksByGroup.set(Object.fromEntries(entries));
     } catch (e) {
       this.error.set(`Gruppen laden fehlgeschlagen: ${e}`);
     }
@@ -66,22 +74,11 @@ export class GroupsComponent {
 
   async deleteGroup(group: Group): Promise<void> {
     await this.library.deleteGroup(group.id);
-    if (this.expandedGroupId() === group.id) this.expandedGroupId.set(null);
     await this.loadGroups();
   }
 
-  async toggleBooks(group: Group): Promise<void> {
-    if (this.expandedGroupId() === group.id) {
-      this.expandedGroupId.set(null);
-      return;
-    }
-    this.books.set(await this.library.listBooks(group.id));
-    this.expandedGroupId.set(group.id);
-  }
-
-  async deleteBook(book: Book, group: Group): Promise<void> {
+  async deleteBook(book: Book): Promise<void> {
     await this.library.deleteBook(book.id);
-    this.books.set(await this.library.listBooks(group.id));
     await this.loadGroups();
   }
 

@@ -1,0 +1,47 @@
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+
+import { LibraryService } from '../library.service';
+import { MetricsRow, ModelInfo } from '../models';
+
+interface Card {
+  info: ModelInfo;
+  metric?: MetricsRow;
+}
+
+@Component({
+  selector: 'app-dashboard',
+  standalone: true,
+  templateUrl: './dashboard.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class DashboardComponent {
+  private readonly library = inject(LibraryService);
+
+  readonly infos = signal<ModelInfo[]>([]);
+  readonly metrics = signal<Record<string, MetricsRow>>({});
+  readonly error = signal('');
+
+  readonly cards = computed<Card[]>(() =>
+    this.infos().map((info) => ({ info, metric: this.metrics()[info.name] })),
+  );
+  readonly totalQueries = computed(() =>
+    Object.values(this.metrics()).reduce((sum, m) => sum + (m.queries ?? 0), 0),
+  );
+
+  constructor() {
+    void this.load();
+  }
+
+  private async load(): Promise<void> {
+    try {
+      const [infos, metrics] = await Promise.all([
+        this.library.modelsInfo(),
+        this.library.metrics(),
+      ]);
+      this.infos.set(infos);
+      this.metrics.set(Object.fromEntries(metrics.per_model.map((r) => [r.model, r])));
+    } catch (e) {
+      this.error.set(`Laden fehlgeschlagen: ${e}`);
+    }
+  }
+}
