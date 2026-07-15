@@ -6,6 +6,9 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Buch-Uploads sind groesser als das nginx-Default (1 MB) -> Limit anheben (sonst 413).
+    client_max_body_size 50m;
+
     # API-Reverse-Proxy: /api/… -> Backend (Prefix wird durch das abschließende / entfernt).
     location /api/ {
         proxy_pass http://${BACKEND_UPSTREAM}/;
