@@ -127,6 +127,11 @@ generatives RAG-System das aussagekräftigere Qualitätsmaß (misst *Stützung*,
 - **Faithfulness statt PPL:** Perplexität misst Fluenz, nicht Korrektheit/Grounding.
 - **Sofort-public Repo:** strikte History-Hygiene (nur Public-Domain-Demotext; geschützte Texte bleiben lokal).
 
+**Optional: Cross-Encoder-Reranker** (`bge-reranker-v2-m3`). Standardmäßig aus (hält das Image schlank);
+aktivieren mit `uv sync --group reranker` + `RERANKER_ENABLED=true`. Dann holt Dense
+`RERANK_CANDIDATES` (30) Kandidaten, der Reranker sortiert sie neu und gibt die Top-`TOP_K` ans LLM
+(lazy geladen, läuft im Thread). Status unter `GET /health` (`reranker: true`).
+
 ## Projektstruktur
 
 ```

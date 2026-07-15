@@ -21,6 +21,12 @@ dev = [
     "pytest>=8.3",
     "ruff>=0.7",
 ]
+# Optional: Cross-Encoder-Reranker. Schwer (torch) -> nicht im Standard-Image.
+# Installieren mit:  uv sync --group reranker
+reranker = [
+    "sentence-transformers>=3.0",
+    "torch>=2.2",
+]
 
 [tool.ruff]
 line-length = 100

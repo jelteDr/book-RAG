@@ -24,5 +24,10 @@ class Settings(BaseSettings):
     # Retrieval.
     top_k: int = 8
 
+    # Cross-Encoder-Reranker (optional, opt-in; braucht die reranker-Dependency-Gruppe).
+    reranker_enabled: bool = False
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    rerank_candidates: int = 30  # Dense holt so viele Kandidaten, Reranker sortiert auf top_k
+
 
 settings = Settings()

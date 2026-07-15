@@ -11,6 +11,7 @@ from app.db.session import init_db, session_factory
 from app.routes import chat, groups, health, ingest, metrics, models
 from app.services.model_registry import sync_models
 from app.services.rag_service import RagService
+from app.services.reranker_service import RerankerService
 
 
 @asynccontextmanager
@@ -18,7 +19,10 @@ async def lifespan(app: FastAPI):
     # Clients + Service für die Laufzeit der App anlegen.
     app.state.ollama = OllamaClient(settings.ollama_base_url)
     app.state.vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
-    app.state.rag = RagService(app.state.ollama, app.state.vectors, settings, session_factory)
+    app.state.reranker = RerankerService(settings.reranker_model, settings.reranker_enabled)
+    app.state.rag = RagService(
+        app.state.ollama, app.state.vectors, settings, session_factory, app.state.reranker
+    )
 
     # DB-Tabellen sicherstellen + Modell-Registry befüllen (best-effort).
     await init_db()

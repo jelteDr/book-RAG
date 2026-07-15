@@ -16,4 +16,9 @@ async def health(request: Request) -> dict:
     qdrant_ok = await request.app.state.vectors.health()
 
     status = "ok" if (ollama_ok and qdrant_ok) else "degraded"
-    return {"status": status, "ollama": ollama_ok, "qdrant": qdrant_ok}
+    return {
+        "status": status,
+        "ollama": ollama_ok,
+        "qdrant": qdrant_ok,
+        "reranker": request.app.state.reranker.active,
+    }

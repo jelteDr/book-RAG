@@ -7,6 +7,7 @@ testbaren Bausteinen (retriever/prompt_builder/citations); der Service verdrahte
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
@@ -30,11 +31,13 @@ class RagService:
         vectors: VectorStore,
         settings: Settings,
         session_factory=None,
+        reranker=None,
     ) -> None:
         self._ollama = ollama
         self._vectors = vectors
         self._settings = settings
         self._session_factory = session_factory
+        self._reranker = reranker
 
     async def answer(
         self, question: str, *, model: str | None = None, group_id: str | None = None,
@@ -45,14 +48,22 @@ class RagService:
         top_k = top_k or self._settings.top_k
         t_start = time.perf_counter()
 
+        rerank = self._reranker is not None and self._reranker.active
+        fetch_k = self._settings.rerank_candidates if rerank else top_k
         try:
             points = await retrieve(
                 question, ollama=self._ollama, vectors=self._vectors,
-                embed_model=self._settings.embed_model, top_k=top_k, group_id=group_id,
+                embed_model=self._settings.embed_model, top_k=fetch_k, group_id=group_id,
             )
         except Exception as exc:  # Ollama/Qdrant nicht erreichbar
             yield "error", {"message": f"Retrieval fehlgeschlagen: {exc}"}
             return
+
+        if rerank and points:
+            # Blockierendes torch im Thread, damit der Event-Loop frei bleibt.
+            points = await asyncio.to_thread(self._reranker.rerank, question, points, top_k)
+        else:
+            points = points[:top_k]
 
         if not points:
             done = {"model": model, "sources": [], "retrieved": []}
