@@ -8,7 +8,7 @@ from app.clients.ollama_client import OllamaClient
 from app.clients.qdrant_client import VectorStore
 from app.config import settings
 from app.db.session import init_db, session_factory
-from app.routes import chat, health, ingest, metrics, models
+from app.routes import chat, groups, health, ingest, metrics, models
 from app.services.model_registry import sync_models
 from app.services.rag_service import RagService
 
@@ -38,4 +38,5 @@ app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(metrics.router)
 app.include_router(chat.router)
+app.include_router(groups.router)
 app.include_router(ingest.router)

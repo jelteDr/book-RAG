@@ -33,13 +33,17 @@ class ParsedBook:
     had_gutenberg_markers: bool
 
 
-def read_text(path: str | Path) -> str:
-    """Liest eine Textdatei und dekodiert mit erkanntem Encoding."""
-    raw = Path(path).read_bytes()
+def decode_bytes(raw: bytes) -> str:
+    """Dekodiert Rohbytes mit erkanntem Encoding (charset-normalizer)."""
     match = from_bytes(raw).best()
     if match is None:  # Fallback: UTF-8 mit Ersatzzeichen
         return raw.decode("utf-8", errors="replace")
     return str(match)
+
+
+def read_text(path: str | Path) -> str:
+    """Liest eine Textdatei und dekodiert mit erkanntem Encoding."""
+    return decode_bytes(Path(path).read_bytes())
 
 
 def parse_gutenberg(text: str) -> ParsedBook:

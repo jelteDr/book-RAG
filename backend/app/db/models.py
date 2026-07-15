@@ -25,6 +25,36 @@ class ModelInfo(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class Group(SQLModel, table=True):
+    """Eine Gruppe (Genre/Franchise). `slug` ist der group_id-Wert im Qdrant-Filter."""
+
+    __tablename__ = "groups"
+
+    id: int | None = Field(default=None, primary_key=True)
+    slug: str = Field(unique=True, index=True)   # z. B. "horror-classics" (Qdrant-group_id)
+    name: str
+    kind: str | None = None                       # "genre" | "franchise" | ...
+    description: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Book(SQLModel, table=True):
+    """Ein ingestetes Buch innerhalb einer Gruppe. `book_key` = book_id in der Qdrant-Payload."""
+
+    __tablename__ = "books"
+
+    id: int | None = Field(default=None, primary_key=True)
+    group_id: int = Field(foreign_key="groups.id", index=True)
+    book_key: str = Field(unique=True, index=True)
+    title: str | None = None
+    author: str | None = None
+    language: str | None = None
+    n_chunks: int = 0
+    status: str = "committed"                      # pending | committed | failed
+    file_hash: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class QueryLog(SQLModel, table=True):
     """Eine Zeile pro Chat-Anfrage — die Metrik-Quelle pro Modell (kein Antworttext)."""
 
