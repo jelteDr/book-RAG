@@ -32,8 +32,8 @@ services:
       - EMBED_MODEL=${EMBED_MODEL:-bge-m3}
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-book_chunks}
-      - SQLITE_PATH=/data/book_rag.db
       - TOP_K=${TOP_K:-8}
+      - DATABASE_URL=postgresql+asyncpg://bookrag:bookrag@postgres:5432/bookrag
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -41,12 +41,32 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=bookrag
+      - POSTGRES_PASSWORD=bookrag
+      - POSTGRES_DB=bookrag
+    ports:
+      # Host-Port 5433 (5432 evtl. belegt); Container-intern bleibt 5432.
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookrag -d bookrag"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   frontend:
     build: ./frontend
@@ -62,3 +82,4 @@ services:
 
 volumes:
   qdrant_storage:
+  postgres_data:

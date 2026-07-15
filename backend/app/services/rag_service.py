@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator
 from app.clients.ollama_client import OllamaClient
 from app.clients.qdrant_client import VectorStore
 from app.config import Settings
+from app.db.models import QueryLog
 from app.rag.citations import extract_citations, sources_overview
 from app.rag.prompt_builder import build_messages
 from app.rag.retriever import retrieve
@@ -23,10 +24,17 @@ Event = tuple[str, dict]
 
 
 class RagService:
-    def __init__(self, ollama: OllamaClient, vectors: VectorStore, settings: Settings) -> None:
+    def __init__(
+        self,
+        ollama: OllamaClient,
+        vectors: VectorStore,
+        settings: Settings,
+        session_factory=None,
+    ) -> None:
         self._ollama = ollama
         self._vectors = vectors
         self._settings = settings
+        self._session_factory = session_factory
 
     async def answer(
         self, question: str, *, model: str | None = None, group_id: str | None = None,
@@ -47,8 +55,10 @@ class RagService:
             return
 
         if not points:
+            done = {"model": model, "sources": [], "retrieved": []}
+            await self._log_query(question, model, group_id, done)
             yield "token", {"content": "Dazu finde ich in den Quellen nichts."}
-            yield "done", {"model": model, "sources": [], "retrieved": []}
+            yield "done", done
             return
 
         answer_parts: list[str] = []
@@ -73,7 +83,7 @@ class RagService:
         e2e_ms = (time.perf_counter() - t_start) * 1000
         completion_tokens = usage.get("completion_tokens") or 0
         decode_ms = max(e2e_ms - (ttft_ms or 0), 1e-6)
-        yield "done", {
+        done = {
             "model": model,
             "ttft_ms": round(ttft_ms if ttft_ms is not None else e2e_ms, 1),
             "e2e_ms": round(e2e_ms, 1),
@@ -82,6 +92,32 @@ class RagService:
             "sources": extract_citations(answer, points),
             "retrieved": sources_overview(points),
         }
+        await self._log_query(question, model, group_id, done)
+        yield "done", done
+
+    async def _log_query(self, question: str, model: str, group_id: str | None, done: dict) -> None:
+        """Schreibt eine query_log-Zeile (best-effort — darf die Antwort nie brechen)."""
+        if self._session_factory is None:
+            return
+        try:
+            usage = done.get("usage") or {}
+            async with self._session_factory() as session:
+                session.add(
+                    QueryLog(
+                        model=model,
+                        group_id=group_id,
+                        question=question,
+                        ttft_ms=done.get("ttft_ms"),
+                        e2e_ms=done.get("e2e_ms"),
+                        tps=done.get("tps"),
+                        prompt_tokens=usage.get("prompt_tokens"),
+                        completion_tokens=usage.get("completion_tokens"),
+                        n_sources=len(done.get("sources") or []),
+                    )
+                )
+                await session.commit()
+        except Exception:
+            pass
 
     async def _stream_deltas(
         self, messages: list[dict], model: str
