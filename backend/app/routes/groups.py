@@ -2,6 +2,7 @@
 
 import hashlib
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
@@ -97,12 +98,15 @@ async def upload_to_group(
             author=author,
         )
 
+        # Fallback: kein Gutenberg-Titel + kein manueller Titel -> Dateiname (statt Buch-Key).
+        resolved_title = result.title or (Path(file.filename or "").stem or None)
+
         if not commit:
-            return {"committed": False, "title": result.title, "author": result.author,
+            return {"committed": False, "title": resolved_title, "author": result.author,
                     "report": result.report}
 
         book = Book(
-            group_id=group_id, book_key=book_key, title=result.title, author=result.author,
+            group_id=group_id, book_key=book_key, title=resolved_title, author=result.author,
             language=result.language, n_chunks=result.n_chunks, status="committed",
             file_hash=file_hash,
         )
