@@ -96,6 +96,12 @@ export class ChatComponent {
     this.expanded.set(null);
   }
 
+  /** Neuer Chat mit dieser Gruppe vorausgewählt (＋ neben dem Gruppennamen in der Sidebar). */
+  newChatInGroup(slug: string): void {
+    this.selectedGroup.set(slug);
+    this.newChat();
+  }
+
   async deleteConversation(conv: Conversation, event: Event): Promise<void> {
     event.stopPropagation(); // nicht gleichzeitig laden
     await this.chat.deleteConversation(conv.id);
