@@ -8,6 +8,73 @@
     <div class="text-red-400 text-sm">{{ error() }}</div>
   }
 
+  <!-- Vergleichs-Balken (vertikal) über ALLE Modelle -->
+  @if (tpsBars().length) {
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <!-- TPS -->
+      <div class="bg-panel border border-edge rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-baseline justify-between">
+          <h3 class="text-sm font-semibold">Ø TPS je Modell</h3>
+          <span class="text-[11px] text-muted">tok/s · mehr = schneller</span>
+        </div>
+        <div class="flex items-end justify-around gap-2 border-b border-edge pb-0">
+          @for (b of tpsBars(); track b.model) {
+            <div class="flex-1 min-w-0 flex flex-col items-center justify-end">
+              <div class="w-full h-28 flex items-end justify-center">
+                <div
+                  class="w-6 sm:w-8 rounded-t"
+                  [class.bg-accent]="b.value"
+                  [class.bg-panel2]="!b.value"
+                  [style.height.%]="b.value ? b.pct : 3"
+                  [title]="b.model + (b.value ? ': ' + b.value + ' tok/s' : ': keine Telemetrie')"
+                ></div>
+              </div>
+              <div class="text-[11px] tabular-nums mt-1">{{ b.value ?? '—' }}</div>
+            </div>
+          }
+        </div>
+        <div class="flex justify-around gap-2">
+          @for (b of tpsBars(); track b.model) {
+            <div class="flex-1 min-w-0 text-[10px] text-muted text-center leading-tight break-all">
+              {{ b.model }}
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- TTFT -->
+      <div class="bg-panel border border-edge rounded-xl p-4 flex flex-col gap-3">
+        <div class="flex items-baseline justify-between">
+          <h3 class="text-sm font-semibold">Ø TTFT je Modell</h3>
+          <span class="text-[11px] text-muted">ms · weniger = schneller</span>
+        </div>
+        <div class="flex items-end justify-around gap-2 border-b border-edge pb-0">
+          @for (b of ttftBars(); track b.model) {
+            <div class="flex-1 min-w-0 flex flex-col items-center justify-end">
+              <div class="w-full h-28 flex items-end justify-center">
+                <div
+                  class="w-6 sm:w-8 rounded-t"
+                  [class.bg-emerald-500]="b.value"
+                  [class.bg-panel2]="!b.value"
+                  [style.height.%]="b.value ? b.pct : 3"
+                  [title]="b.model + (b.value ? ': ' + b.value + ' ms' : ': keine Telemetrie')"
+                ></div>
+              </div>
+              <div class="text-[11px] tabular-nums mt-1">{{ b.value ?? '—' }}</div>
+            </div>
+          }
+        </div>
+        <div class="flex justify-around gap-2">
+          @for (b of ttftBars(); track b.model) {
+            <div class="flex-1 min-w-0 text-[10px] text-muted text-center leading-tight break-all">
+              {{ b.model }}
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
     @for (c of cards(); track c.info.name) {
       <div class="bg-panel border border-edge rounded-xl p-4 flex flex-col gap-3">

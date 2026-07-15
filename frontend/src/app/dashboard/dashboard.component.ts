@@ -8,6 +8,13 @@ interface Card {
   metric?: MetricsRow;
 }
 
+/** Ein Balken im Vergleichs-Chart: Wert (null = keine Telemetrie) + relative Höhe (0–100 %). */
+interface Bar {
+  model: string;
+  value: number | null;
+  pct: number;
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -27,6 +34,25 @@ export class DashboardComponent {
   readonly totalQueries = computed(() =>
     Object.values(this.metrics()).reduce((sum, m) => sum + (m.queries ?? 0), 0),
   );
+
+  /** TPS-Vergleich (mehr = schneller). */
+  readonly tpsBars = computed(() => this.bars((m) => m.avg_tps));
+  /** TTFT-Vergleich in ms (weniger = schneller). */
+  readonly ttftBars = computed(() => this.bars((m) => m.avg_ttft_ms));
+
+  /**
+   * Normierte Balken über ALLE Modelle (gleiche Reihenfolge wie die Karten,
+   * damit ein Modell in beiden Charts an derselben x-Position steht).
+   * Modelle ohne Telemetrie: value=null → grauer Stummel-Balken.
+   */
+  private bars(pick: (m: MetricsRow) => number | null): Bar[] {
+    const rows = this.infos().map((info) => {
+      const raw = this.metrics()[info.name] ? pick(this.metrics()[info.name]) : null;
+      return { model: info.name, value: raw != null && raw > 0 ? raw : null };
+    });
+    const max = rows.reduce((mx, r) => Math.max(mx, r.value ?? 0), 0);
+    return rows.map((r) => ({ ...r, pct: r.value && max ? (r.value / max) * 100 : 0 }));
+  }
 
   constructor() {
     void this.load();
