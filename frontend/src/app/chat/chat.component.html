@@ -14,7 +14,18 @@
     <div class="flex-1 overflow-y-auto p-2 flex flex-col gap-3">
       @for (grp of groupedConversations(); track grp.key) {
         <div>
-          <div class="text-[11px] uppercase tracking-wide text-muted px-1 mb-1">{{ grp.label }}</div>
+          <div class="flex items-center justify-between px-1 mb-1">
+            <span class="text-[11px] uppercase tracking-wide text-muted truncate">{{ grp.label }}</span>
+            @if (grp.key) {
+              <button
+                class="text-accent hover:opacity-80 text-base leading-none px-1 shrink-0"
+                (click)="newChatInGroup(grp.key)"
+                title="Neuer Chat in dieser Gruppe"
+              >
+                ＋
+              </button>
+            }
+          </div>
           @for (c of grp.items; track c.id) {
             <div
               class="flex items-center justify-between gap-1 rounded-md px-2 py-1 cursor-pointer hover:bg-panel2"
