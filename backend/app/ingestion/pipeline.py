@@ -13,7 +13,7 @@ from app.clients.ollama_client import OllamaClient
 from app.clients.qdrant_client import VectorStore
 from app.ingestion.chunker import chunk_book
 from app.ingestion.cleaner import clean
-from app.ingestion.parser import parse_gutenberg, read_text
+from app.ingestion.parser import decode_bytes, parse_gutenberg, read_text
 from app.util import l2_normalize
 
 
@@ -38,8 +38,18 @@ async def _embed_batched(
     return vectors
 
 
-async def ingest_file(
-    path: str,
+async def ingest_file(path: str, **kwargs) -> IngestResult:
+    """Ingestet eine Datei vom Pfad (CLI)."""
+    return await ingest_text(read_text(path), **kwargs)
+
+
+async def ingest_bytes(raw: bytes, **kwargs) -> IngestResult:
+    """Ingestet hochgeladene Rohbytes (Upload-Endpoint)."""
+    return await ingest_text(decode_bytes(raw), **kwargs)
+
+
+async def ingest_text(
+    raw_text: str,
     *,
     book_id: str,
     group_id: str,
@@ -50,8 +60,7 @@ async def ingest_file(
     title: str | None = None,
     author: str | None = None,
 ) -> IngestResult:
-    raw = read_text(path)
-    parsed = parse_gutenberg(raw)
+    parsed = parse_gutenberg(raw_text)
     cleaned, report = clean(parsed.body)
 
     res_title = title or parsed.title
