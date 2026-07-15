@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 
 import { ChatService } from '../chat.service';
 import { LibraryService } from '../library.service';
@@ -20,6 +21,7 @@ interface Segment {
 export class ChatComponent {
   private readonly chat = inject(ChatService);
   private readonly library = inject(LibraryService);
+  private readonly route = inject(ActivatedRoute);
 
   readonly models = signal<string[]>([]);
   readonly selectedModel = signal('');
@@ -70,6 +72,12 @@ export class ChatComponent {
       this.groups.set(await this.library.listGroups());
     } catch {
       this.groups.set([]);
+    }
+    // Aus „Chat starten" in der Dokumente-View: Gruppe per ?group=<slug> vorauswählen.
+    const preset = this.route.snapshot.queryParamMap.get('group');
+    if (preset && this.groups().some((g) => g.slug === preset)) {
+      this.selectedGroup.set(preset);
+      this.newChat();
     }
     await this.refreshConversations();
   }

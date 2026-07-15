@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 
 import { LibraryService } from '../library.service';
 import { Book, Group, UploadResult } from '../models';
@@ -13,6 +14,7 @@ import { Book, Group, UploadResult } from '../models';
 })
 export class GroupsComponent {
   private readonly library = inject(LibraryService);
+  private readonly router = inject(Router);
 
   readonly groups = signal<Group[]>([]);
   readonly error = signal('');
@@ -72,6 +74,11 @@ export class GroupsComponent {
     } catch (e) {
       this.error.set(`Anlegen fehlgeschlagen: ${e}`);
     }
+  }
+
+  /** Öffnet den Chat mit dieser Gruppe bereits vorausgewählt (frischer Chat). */
+  openChat(group: Group): void {
+    void this.router.navigate(['/chat'], { queryParams: { group: group.slug } });
   }
 
   async deleteGroup(group: Group): Promise<void> {
