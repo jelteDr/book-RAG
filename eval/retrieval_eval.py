@@ -6,7 +6,7 @@ Skript nutzt denselben Retriever wie die App und ist reproduzierbar.
 
 Aufruf (aus dem backend-Verzeichnis, damit die app-Module importierbar sind):
   uv run python ../eval/retrieval_eval.py --gold ../eval/gold_dracula.jsonl \
-      --group horror-classics --k 8
+      --group Horror --k 8
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ async def evaluate(gold_path: str, group_id: str | None, k: int, embed_model: st
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gold", default=str(Path(__file__).resolve().parent / "gold_dracula.jsonl"))
-    ap.add_argument("--group", default="horror-classics")
+    ap.add_argument("--group", default="Horror")
     ap.add_argument("--k", type=int, default=8)
     ap.add_argument("--embed-model", default=settings.embed_model)
     args = ap.parse_args()

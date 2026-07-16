@@ -2,7 +2,8 @@
 
 Reproduzierbar via `make eval` (Baseline) bzw. den Experiment-Skripten in `eval/`.
 Korpus: Dracula (581 Chunks), Embeddings `bge-m3`, Qdrant Cosine. Relevanz
-**kapitel-basiert** (Gold-Set `eval/gold_dracula.jsonl`, **n=10** Fragen).
+**kapitel-basiert** (Gold-Set `eval/gold_dracula.jsonl`, inzwischen **n=21** Fragen;
+die frühen Experimente unten liefen noch gegen n=10 — jeweils am Experiment vermerkt).
 
 > **Metrik-Hinweis (Ehrlichkeit):** Was hier „Recall@k" heißt, ist faktisch
 > **Hit-Rate@k / Success@k** — der Wert ist 1.0, sobald *irgendein* relevantes
@@ -133,8 +134,14 @@ Pro Gold-Frage (n=21) wird die volle RAG-Pipeline ausgeführt (Modell `qwen2.5:7
 
 ## Nächste Schritte
 
-1. **Passagen-basierte Gold-Labels** (statt kapitel-basiert) — dann bewertet die
-   Metrik den Reranker fair; Gold-Set weiter auf n≥30–50.
-2. **`bm25_en`-Arm** — trennt „BM25 schwach" von „cross-lingual verhungert".
-3. Reranker in die `/chat`-Pipeline integrieren (Precision@1/MRR-Gewinn hilft der
-   Antwortqualität direkt), plus Bootstrap-CI / paired Test.
+1. **Gold-Set v2 mit Span-Labels** (in Kuration, `notebooks/gold_set_v2.ipynb`):
+   passagen-genaue Labels statt Kapitel (Ø 30,2 von 581 Chunks zählen unter einem
+   Kapitel-Label als Treffer — die Metrik ist massiv zu gnädig), n≥30–50; danach
+   `retrieval_eval.py` auf Span-Overlap umstellen (Kapitel-Arm als Vergleich behalten).
+2. **Exp 4 — Contextual Retrieval:** LLM-generierter Chunk-Kontext beim Embedden
+   (paired dense vs. dense+kontext).
+3. **Exp 5 — Sparse-Hybrid** mit bge-m3-eigenen Sparse-Gewichten statt BM25
+   (adressiert das cross-linguale Handicap aus Exp 2); dabei auch `bm25_en`-Arm.
+4. Bootstrap-CI / paired Test, sobald n≥30.
+5. ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in via
+   `RERANKER_ENABLED`, s. README).

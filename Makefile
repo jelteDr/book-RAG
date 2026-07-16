@@ -41,14 +41,17 @@ ollama-host: ## Einmalig (macOS): Host-Ollama für Container erreichbar machen
 	launchctl setenv OLLAMA_HOST 0.0.0.0:11434
 	@echo "Gesetzt. Bitte die Ollama-App EINMAL beenden und neu öffnen, dann 'make restart'."
 
-ingest: ## Demo-Buch Dracula ingesten (Gruppe horror-classics)
+# Gruppe für Demo-Ingest + Eval (überschreibbar: make eval GROUP=...)
+GROUP ?= Horror
+
+ingest: ## Demo-Buch Dracula ingesten (Gruppe $(GROUP))
 	cd backend && uv run python -m app.ingestion.ingest_cli \
-		../data/Dracula/dracula.txt --book-id dracula --group horror-classics \
+		../data/Dracula/dracula.txt --book-id dracula --group "$(GROUP)" \
 		--title "Dracula" --author "Bram Stoker" --commit
 
 eval: ## Retrieval-Evaluation gegen das Gold-Set (Recall@k, MRR)
 	cd backend && uv run python ../eval/retrieval_eval.py \
-		--gold ../eval/gold_dracula.jsonl --group horror-classics --k 8
+		--gold ../eval/gold_dracula.jsonl --group "$(GROUP)" --k 8
 
 logs: ## Container-Logs folgen
 	docker compose logs -f

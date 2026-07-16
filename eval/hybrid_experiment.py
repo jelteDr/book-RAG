@@ -55,7 +55,7 @@ def rrf_fuse(*ranked_id_lists: list[str]) -> list[str]:
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gold", default=str(Path(__file__).resolve().parent / "gold_dracula.jsonl"))
-    ap.add_argument("--group", default="horror-classics")
+    ap.add_argument("--group", default="Horror")
     args = ap.parse_args()
 
     from rank_bm25 import BM25Okapi

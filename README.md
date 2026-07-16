@@ -27,27 +27,41 @@ Buch, Kapitel und Ähnlichkeits-Score. Lokal reproduzierbar via `make up` (siehe
 
 ```
 Angular (minimal, Signals) ──REST + SSE──► FastAPI (Python 3.12)
-   Chat · [n]-Zitat-Chips · Modell-Dropdown        │  RagService (Service-Schicht)
+ Chat · Dokumente · Modelle · Dashboard            │  RagService (Service-Schicht)
                                           ┌─────────┼──────────┐
                                           ▼         ▼          ▼
-                                       Ollama     Qdrant     SQLite
-                                    Chat + bge-m3  Vektoren   (Metadaten/Log)
+                                       Ollama     Qdrant    PostgreSQL
+                                    Chat + bge-m3  Vektoren  (Metadaten · Chats · query_log)
 ```
 
 - **Ollama** — lokales LLM (`qwen2.5:7b-instruct`) + Embeddings (`bge-m3`, multilingual)
 - **FastAPI** — dünne Routen + `RagService` (retrieve → Prompt → Streaming → Zitat-Mapping)
-- **Qdrant** — Vektor-Suche (Cosine) mit Metadaten-Filter (Gruppen/Bücher)
-- **Angular** — schlanke SPA (Standalone-Components, Signals, `@if/@for`), nginx-`/api`-Proxy für SSE
-- **Notebooks/Skripte** — die komplette Evaluations-Suite (`eval/`)
+- **Qdrant** — Vektor-Suche (Cosine) mit Metadaten-Filter (Gruppen/Bücher/Sammelgruppen)
+- **PostgreSQL** — Gruppen/Bücher, Modell-Registry, gespeicherte Unterhaltungen, Anfrage-Log
+- **Angular** — schlanke SPA (Standalone-Components, Signals, `@if/@for`), nginx-`/api`-Proxy für SSE;
+  Views: Chat, Dokumente (Upload/Gruppen), Modelle (Metadaten), Dashboard (Live-Telemetrie)
+- **Notebooks/Skripte** — die komplette Evaluations-Suite (`eval/`, `notebooks/`)
 
 ## Features
 
 - Robuste **Ingestion-Pipeline**: Encoding-Sniffing, Gutenberg-Boilerplate-Strip, deterministische
   **Textbereinigung** (De-Wrapping, Zeichen-Normalisierung) mit **Dry-Run-Prüf-Gate**, strukturbewusstes
-  Chunking (Kapitel + Offsets auf bereinigtem Text).
+  Chunking (Kapitel + Offsets auf bereinigtem Text), Input-Validierung vor dem Embedden.
+- **Upload-UI mit Gruppen**: Texte im Browser hochladen (Dry-Run-Report → Commit), in Gruppen
+  (Genre/Franchise) organisieren; Slugs entstehen automatisch aus dem Namen.
+- **Sammelgruppen**: mehrere Gruppen unter einem Namen bündeln (z. B. „Fantasy" = GoT + Harry
+  Potter) — **ohne Re-Ingestion**; der Slug expandiert beim Retrieval zu einem
+  Qdrant-`MatchAny`-Filter über die Mitglieds-Gruppen.
 - **Grounding via Zitat-Contract**: nummerierte Quellen im Prompt, `[n]` wird **serverseitig** auf
-  Chunk-IDs gemappt (halluzinierte Marker werden verworfen).
+  Chunk-IDs gemappt (halluzinierte Marker werden verworfen); Quell-Passagen werden mit der
+  Unterhaltung **persistiert** und bleiben beim Wiederöffnen lesbar.
+- **Gespeicherte Chats mit Verlauf**: Unterhaltungen in Postgres, Sidebar nach Gruppen gebündelt;
+  **History-aware Retrieval** (Folgefragen werden per LLM zu eigenständigen Suchanfragen kondensiert).
 - **Cross-linguales Retrieval** (deutsche Fragen, englische Texte) via `bge-m3`.
+- **Dashboard**: Live-Telemetrie aus dem `query_log` — Anfragen, Ø TTFT, Ø TPS pro Modell,
+  inkl. Vergleichs-Barplots; Modell-Metadaten (Parameter, Quantisierung, Kontext) aus Ollama.
+- **Optionale Qualitäts-Services** (opt-in): Cross-Encoder-**Reranker** (`bge-reranker-v2-m3`)
+  und **NLI-Faithfulness-Check**, der ungestützte Zitate im Frontend mit ⚠ markiert.
 - **Serving-Metriken** pro Anfrage: TTFT, TPS, Tokens.
 
 ## Schnellstart (macOS, Apple Silicon)
@@ -71,7 +85,10 @@ make ingest               # Demo-Buch (Public Domain) ingesten
 
 Alle Experimente sind reproduzierbar (`eval/`), gegen ein handgelabeltes Gold-Set
 (`eval/gold_dracula.jsonl`, **n=21**, Kapitel-Labels im Quelltext verankert). Volle Ergebnisse
-und Methodik-Caveats: [`eval/RESULTS.md`](eval/RESULTS.md).
+und Methodik-Caveats: [`eval/RESULTS.md`](eval/RESULTS.md). Ein **Gold-Set v2** mit
+passagen-genauen Span-Labels entsteht gerade in
+[`notebooks/gold_set_v2.ipynb`](notebooks/gold_set_v2.ipynb) (Labeling-Helfer auf der echten
+Pipeline-Suche, interaktive PCA-Karte des Embedding-Raums, Wortwolken).
 
 > **Ehrlichkeits-Hinweis:** n=21 ist ein Dev-Set ohne statistische Signifikanz — die Ergebnisse
 > sind Trends, keine belastbaren Rankings. „Recall@k" ist hier faktisch **Hit-Rate@k**.
@@ -127,17 +144,20 @@ generatives RAG-System das aussagekräftigere Qualitätsmaß (misst *Stützung*,
 - **Faithfulness statt PPL:** Perplexität misst Fluenz, nicht Korrektheit/Grounding.
 - **Sofort-public Repo:** strikte History-Hygiene (nur Public-Domain-Demotext; geschützte Texte bleiben lokal).
 
-**Optional: Cross-Encoder-Reranker** (`bge-reranker-v2-m3`). Standardmäßig aus (hält das Image schlank);
-aktivieren mit `uv sync --group reranker` + `RERANKER_ENABLED=true`. Dann holt Dense
-`RERANK_CANDIDATES` (30) Kandidaten, der Reranker sortiert sie neu und gibt die Top-`TOP_K` ans LLM
-(lazy geladen, läuft im Thread). Status unter `GET /health` (`reranker: true`).
+**Optional: Cross-Encoder-Reranker** (`bge-reranker-v2-m3`) **und NLI-Faithfulness-Check**
+(`mDeBERTa-xnli`). Standardmäßig aus (hält das Image schlank); lokal via `uv sync --group reranker`
++ `RERANKER_ENABLED=true` / `FAITHFULNESS_CHECK_ENABLED=true`. Dann holt Dense
+`RERANK_CANDIDATES` (30) Kandidaten, der Reranker sortiert sie neu und gibt die Top-`TOP_K` ans LLM;
+der Faithfulness-Check markiert Zitate, die die Quelle laut NLI nicht stützt (⚠ im Frontend).
+Beide Modelle laden lazy und laufen im Thread. Status unter `GET /health`.
 
 ## Projektstruktur
 
 ```
 backend/    FastAPI (routes/ · services/ · rag/ · ingestion/ · clients/ · db/)
-frontend/   Angular (models.ts · chat.service.ts · app.component.*), nginx-Proxy
+frontend/   Angular (chat/ · groups/ · models/ · dashboard/ · services), nginx-Proxy
 eval/       Gold-Set + Experimente (retrieval/lang/hybrid/reranker/answer) + RESULTS.md
+notebooks/  DS-Notebooks (Gold-Set v2: Span-Labels, PCA-Karte, Wortwolken)
 results/    Charts & Roh-Ergebnisse
 benchmark/  Serving-Benchmark (Ollama vs. llama-server)
 docs/       Projektplan
@@ -151,9 +171,14 @@ Git Flow: `main` (stabil) ← `develop` (Integration) ← `feature/*`. Commits a
 
 ## Grenzen & Roadmap
 
-- Eval-Set klein (n=21, kapitel-basiert) → **passagen-basierte Labels + n≥30–50** für belastbare Aussagen.
-- Reranker in die `/chat`-Pipeline integrieren (Precision@1/MRR-Gewinn direkt nutzen).
-- Optional: Ingestion-UI, Gruppen-Verwaltung, Modellwechsel-UI, Serving-Benchmark-Kurven.
+- Eval-Set klein (n=21, kapitel-basiert) → **Gold-Set v2 mit Span-Labels + n≥30–50** ist in
+  Kuration (`notebooks/gold_set_v2.ipynb`); danach Eval-Skripte auf Span-Overlap-Metrik umstellen.
+- **Contextual Retrieval** (LLM-generierter Chunk-Kontext beim Ingest) als nächstes Experiment.
+- **Sparse-Hybrid** mit bge-m3-eigenen Sparse-Gewichten (adressiert das cross-linguale
+  BM25-Handicap aus Exp 2).
+- Bewusst minimal (lokales Projekt): kein Auth/CORS/Rate-Limiting.
+- ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in, s. o.).
+- ~~Ingestion-UI, Gruppen-Verwaltung, Modellwechsel-UI~~ ✅ umgesetzt.
 
 ## Lizenz
 

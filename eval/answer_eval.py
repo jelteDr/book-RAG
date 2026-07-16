@@ -129,7 +129,7 @@ class Faithfulness:
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gold", default=str(Path(__file__).resolve().parent / "gold_dracula.jsonl"))
-    ap.add_argument("--group", default="horror-classics")
+    ap.add_argument("--group", default="Horror")
     ap.add_argument("--model", default=settings.chat_model)
     ap.add_argument("--k", type=int, default=settings.top_k)
     args = ap.parse_args()

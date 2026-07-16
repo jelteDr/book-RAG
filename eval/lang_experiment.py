@@ -82,7 +82,7 @@ def plot(de: dict, en: dict, k: int, out: Path) -> bool:
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gold", default=str(Path(__file__).resolve().parent / "gold_dracula.jsonl"))
-    ap.add_argument("--group", default="horror-classics")
+    ap.add_argument("--group", default="Horror")
     ap.add_argument("--k", type=int, default=8)
     args = ap.parse_args()
 

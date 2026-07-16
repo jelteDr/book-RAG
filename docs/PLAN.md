@@ -1,5 +1,14 @@
 # Plan: Lokale RAG-Anwendung für Buchtexte mit Zitierung & Monitoring (`book-rag`)
 
+> **Status-Update (Juli 2026):** Dieser Plan ist das ursprüngliche Planungsdokument und wird
+> bewusst nicht laufend umgeschrieben. Abweichungen der Umsetzung:
+> - **Metadaten-Store ist PostgreSQL statt SQLite** (SQLModel/asyncpg; Gruppen, Bücher,
+>   Modell-Registry, gespeicherte Unterhaltungen, query_log).
+> - **M3 und M4 sind umgesetzt** (Upload-UI mit Dry-Run-Gate, Gruppen + Qdrant-Filter,
+>   DELETE/PATCH, Modell-Auswahl, NLI-Faithfulness opt-in inline) — darüber hinaus:
+>   Sammelgruppen (Collections), Dashboard, Chat-Persistenz mit Verlauf, Auto-Slug.
+> - Aktueller Stand & Roadmap: siehe README („Grenzen & Roadmap") und `eval/RESULTS.md`.
+
 ## Kontext
 
 Portfolio-Projekt für den Wechsel Richtung **Data Scientist / ML Engineer**. Die
@@ -240,10 +249,10 @@ Attention über Ollama nicht verfügbar).
 - **M2 — Zitate + Demo (= SHIPPABLE):** inline `[n]`-Streaming + serverseitiges Mapping, klickbare
   Chips + Score; „nicht in den Quellen"-Fall; **Gold-Eval-Set + Recall@k + 1 Before/After-Chart**;
   **2–3-min Screencast/GIF + Screenshots ins README**; README „mini-thesis" fertig. → **Vollständiges Portfolio-Stück.**
-- **M3 (optional) — Ingestion-UI & Gruppen:** Upload-UI, Kaggle-Adapter, Cleaning-Gate im UI,
-  Gruppen + Qdrant-Filter, DELETE/PATCH. (Nach M3 ggf. Reingestion nötig.)
-- **M4 (optional) — Modellwechsel & Faithfulness:** `/models`-Dropdown, NLI-Faithfulness inline,
-  Modell-Benchmark-Notebook (temp=0).
+- **M3 (optional) — Ingestion-UI & Gruppen:** ✅ umgesetzt — Upload-UI, Cleaning-Gate im UI,
+  Gruppen + Qdrant-Filter, DELETE/PATCH (Kaggle-Adapter entfiel: Upload deckt es ab).
+- **M4 (optional) — Modellwechsel & Faithfulness:** ✅ umgesetzt — Modell-Auswahl im Chat,
+  NLI-Faithfulness inline (opt-in); Modell-Benchmark-Notebook offen.
 - **M5 (optional) — Bonus:** llama-server Serving-Benchmark-Kurven, `full`-Compose-Profil.
 
 ## Risiken & Mitigationen
