@@ -1,12 +1,18 @@
-"""Retrieval-Evaluation gegen ein Gold-Set (Recall@k, MRR) — kapitel-basiert.
+"""Retrieval-Evaluation gegen ein Gold-Set (Hit-Rate@k, MRR).
 
-Kapitel-Relevanz ist ein pragmatischer Proxy (die Antwort steht im/in den
-genannten Kapitel(n)); exakte Chunk-Labels wären genauer, aber teurer. Das
-Skript nutzt denselben Retriever wie die App und ist reproduzierbar.
+Unterstützt beide Label-Formate und rechnet vorhandene Arme parallel:
+- v1 (`relevant_chapters`): kapitel-basiert — pragmatischer, aber grober Proxy.
+- v2 (`spans` aus notebooks/gold_set_v2.ipynb): passagen-genau — Treffer, wenn ein
+  gefundener Chunk einen Gold-Span (book_id + char_start/char_end) überlappt.
+  v2-Items tragen `chapters` als Vergleichs-Feld, damit die Überschätzung der
+  Kapitel-Metrik direkt sichtbar wird.
+
+Das Skript nutzt denselben Retriever wie die App (inkl. Overlap-Dedup).
 
 Aufruf (aus dem backend-Verzeichnis, damit die app-Module importierbar sind):
   uv run python ../eval/retrieval_eval.py --gold ../eval/gold_dracula.jsonl \
       --group Horror --k 8
+  uv run python ../eval/retrieval_eval.py --gold ../eval/gold_v2.jsonl --group Horror
 """
 
 from __future__ import annotations
@@ -36,18 +42,65 @@ def chapter_roman(chapter: str | None) -> str | None:
     return m.group(1).upper() if m else None
 
 
+def span_hit(payload: dict, item: dict) -> bool:
+    """Span-Metrik (Gold-Set v2): Treffer, wenn der Chunk einen Gold-Span überlappt.
+
+    Ein Span ist {book_id, char_start, char_end} im bereinigten Buchtext — er überlebt
+    Re-Chunking (Chunk-Indizes verschieben sich, Zeichen-Offsets nicht).
+    """
+    if item.get("book_id") and payload.get("book_id") != item["book_id"]:
+        return False
+    return any(
+        payload.get("char_start") is not None
+        and payload["char_start"] < s["char_end"]
+        and s["char_start"] < payload["char_end"]
+        for s in item.get("spans", [])
+    )
+
+
+def _first_hit(flags: list[bool]) -> int | None:
+    hits = [i + 1 for i, f in enumerate(flags) if f]
+    return hits[0] if hits else None
+
+
+class _Arm:
+    """Sammelt Hit-Rate@k + MRR für einen Metrik-Arm (kapitel- oder span-basiert)."""
+
+    def __init__(self, k: int) -> None:
+        self.hits_at = {1: 0, 3: 0, 5: 0, k: 0}
+        self.rr: list[float] = []
+
+    def add(self, flags: list[bool]) -> int | None:
+        first = _first_hit(flags)
+        self.rr.append(1.0 / first if first else 0.0)
+        for kk in self.hits_at:
+            if any(flags[:kk]):
+                self.hits_at[kk] += 1
+        return first
+
+    def report(self, name: str, k: int) -> None:
+        n = len(self.rr)
+        if not n:
+            return
+        print(f"\n=== Ergebnisse (n={n}, k={k}, {name}) ===")
+        for kk in sorted(self.hits_at):
+            print(f"  Hit-Rate@{kk}: {self.hits_at[kk] / n:.2f}  ({self.hits_at[kk]}/{n})")
+        print(f"  MRR:         {sum(self.rr) / n:.3f}")
+
+
 async def evaluate(gold_path: str, group_id: str | None, k: int, embed_model: str) -> None:
     gold = [json.loads(line) for line in Path(gold_path).read_text().splitlines() if line.strip()]
+    # unanswerable-Items (v2) messen Antwort-Ehrlichkeit, nicht Retrieval.
+    gold = [g for g in gold if g.get("qtype") != "unanswerable"]
 
     ollama = OllamaClient(settings.ollama_base_url)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
 
-    recall_at = {1: 0, 3: 0, 5: 0, k: 0}
-    reciprocal_ranks: list[float] = []
+    chapter_arm = _Arm(k)
+    span_arm = _Arm(k)
 
     try:
         for item in gold:
-            relevant = {r.upper() for r in item["relevant_chapters"]}
             points = await retrieve(
                 item["question"],
                 ollama=ollama,
@@ -56,26 +109,37 @@ async def evaluate(gold_path: str, group_id: str | None, k: int, embed_model: st
                 top_k=k,
                 group_id=group_id,
             )
-            ranks = [chapter_roman((p.payload or {}).get("chapter")) for p in points]
-            hit_positions = [i + 1 for i, r in enumerate(ranks) if r in relevant]
-            first = hit_positions[0] if hit_positions else None
+            payloads = [p.payload or {} for p in points]
 
-            reciprocal_ranks.append(1.0 / first if first else 0.0)
-            for kk in recall_at:
-                if any(r in relevant for r in ranks[:kk]):
-                    recall_at[kk] += 1
+            # Kapitel-Arm (v1-Labels; in v2 als Vergleichs-Feld `chapters` weitergeführt).
+            chapters = item.get("relevant_chapters") or item.get("chapters") or []
+            first_ch = None
+            if chapters:
+                relevant = {r.upper() for r in chapters}
+                flags = [chapter_roman(pl.get("chapter")) in relevant for pl in payloads]
+                first_ch = chapter_arm.add(flags)
 
-            status = f"@{first}" if first else "MISS"
-            print(f"  {item['id']}: {status:>5}  top-Kapitel={ranks[:5]}  (soll {sorted(relevant)})")
+            # Span-Arm (v2-Labels).
+            first_sp = None
+            if item.get("spans"):
+                flags = [span_hit(pl, item) for pl in payloads]
+                first_sp = span_arm.add(flags)
+
+            def fmt(first: int | None, present: bool) -> str:
+                return ("—" if not present else f"@{first}" if first else "MISS")
+
+            print(f"  {item['id']}: kapitel={fmt(first_ch, bool(chapters)):>5}  "
+                  f"span={fmt(first_sp, bool(item.get('spans'))):>5}")
     finally:
         await ollama.aclose()
         await vectors.aclose()
 
-    n = len(gold)
-    print(f"\n=== Ergebnisse (n={n}, k={k}, kapitel-basiert) ===")
-    for kk in sorted(recall_at):
-        print(f"  Recall@{kk}: {recall_at[kk] / n:.2f}  ({recall_at[kk]}/{n})")
-    print(f"  MRR:       {sum(reciprocal_ranks) / n:.3f}")
+    chapter_arm.report("kapitel-basiert", k)
+    span_arm.report("span-basiert (v2)", k)
+    if chapter_arm.rr and span_arm.rr and len(chapter_arm.rr) == len(span_arm.rr):
+        diff = sum(c - s for c, s in zip(chapter_arm.rr, span_arm.rr)) / len(span_arm.rr)
+        print(f"\n  Ø MRR-Differenz Kapitel−Span: {diff:+.3f} "
+              f"(positiv = Kapitel-Labels überschätzen das Retrieval)")
 
 
 def main() -> None:

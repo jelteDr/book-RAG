@@ -147,7 +147,8 @@ async def main() -> None:
     rows = []
     try:
         for item in gold:
-            relevant = {r.upper() for r in item["relevant_chapters"]}
+            # v1: relevant_chapters; v2 (gold_v2.jsonl): chapters als Vergleichs-Feld.
+            relevant = {r.upper() for r in item.get("relevant_chapters") or item.get("chapters") or []}
             pts = await retrieve(
                 item["question"], ollama=ollama, vectors=vectors,
                 embed_model=settings.embed_model, top_k=args.k, group_id=args.group,
