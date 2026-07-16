@@ -40,7 +40,7 @@ def hit_rate_mrr(chapters: list[str | None], relevant: set[str], ks=(1, 3, 5, 8)
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gold", default=str(Path(__file__).resolve().parent / "gold_dracula.jsonl"))
-    ap.add_argument("--group", default="horror-classics")
+    ap.add_argument("--group", default="Horror")
     args = ap.parse_args()
 
     from sentence_transformers import CrossEncoder
