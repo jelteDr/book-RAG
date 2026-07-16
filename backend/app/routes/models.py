@@ -21,12 +21,30 @@ class ModelPatch(BaseModel):
 
 @router.get("/models")
 async def list_models(request: Request) -> dict:
-    """Schlanke Liste fürs Frontend-Dropdown (Namen + Default)."""
+    """Schlanke Liste fürs Frontend-Dropdown — nur chatfähige Modelle.
+
+    Embedding-Modelle (z. B. bge-m3) liefern am Chat-Endpoint 400 Bad Request.
+    Ollama meldet die Fähigkeiten pro Modell via /api/show (`capabilities`);
+    ohne `completion` fliegt das Modell aus der Auswahl. Meldet eine ältere
+    Ollama-Version keine capabilities, bleibt das Modell drin (kein False-Drop).
+    """
+    ollama = request.app.state.ollama
     try:
-        tags = await request.app.state.ollama.list_models()
+        tags = await ollama.list_models()
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Ollama nicht erreichbar: {exc}") from exc
-    names = [t.get("name") for t in tags if t.get("name")]
+
+    names = []
+    for tag in tags:
+        name = tag.get("name")
+        if not name:
+            continue
+        try:
+            capabilities = (await ollama.show(name)).get("capabilities")
+        except Exception:
+            capabilities = None  # im Zweifel nicht filtern
+        if capabilities is None or "completion" in capabilities:
+            names.append(name)
     return {"default": settings.chat_model, "available": names}
 
 
