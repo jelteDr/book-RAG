@@ -146,4 +146,86 @@
       <div class="text-sm text-muted">Noch keine Gruppen — oben eine anlegen.</div>
     }
   </div>
+
+  <!-- Sammelgruppen: mehrere Gruppen unter einem Slug bündeln (ohne Re-Upload) -->
+  <div>
+    <h2 class="text-lg font-semibold">Sammelgruppen</h2>
+    <p class="text-xs text-muted">
+      Bündeln bestehende Gruppen für den Chat (z. B. „Fantasy" = mehrere Franchises) — die
+      Texte bleiben, wo sie sind.
+    </p>
+  </div>
+
+  <div class="bg-panel border border-edge rounded-xl p-4 flex flex-col gap-3">
+    <div class="flex flex-wrap gap-3 items-end">
+      <label class="flex flex-col gap-1 text-xs text-muted">
+        Slug (Filter-ID)
+        <input
+          class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 w-48"
+          [ngModel]="colSlug()"
+          (ngModelChange)="colSlug.set($event)"
+          placeholder="z. B. fantasy"
+        />
+      </label>
+      <label class="flex flex-col gap-1 text-xs text-muted">
+        Name
+        <input
+          class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 w-48"
+          [ngModel]="colName()"
+          (ngModelChange)="colName.set($event)"
+          placeholder="z. B. Fantasy"
+        />
+      </label>
+      <button
+        class="bg-accent text-onaccent font-semibold rounded-lg px-4 py-1.5 disabled:opacity-50"
+        (click)="createCollection()"
+        [disabled]="!colSlug().trim() || !colName().trim() || !colMembers().size"
+      >
+        Anlegen
+      </button>
+    </div>
+    <div class="flex flex-wrap gap-3 text-sm">
+      <span class="text-xs text-muted self-center">Mitglieder:</span>
+      @for (g of groups(); track g.id) {
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="checkbox"
+            [checked]="colMembers().has(g.slug)"
+            (change)="toggleMember(g.slug)"
+          />
+          {{ g.name }}
+        </label>
+      } @empty {
+        <span class="text-xs text-muted">Erst Gruppen anlegen.</span>
+      }
+    </div>
+  </div>
+
+  <div class="flex flex-col gap-3">
+    @for (c of collections(); track c.id) {
+      <div class="bg-panel border border-edge rounded-xl p-4">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <div class="font-medium">{{ c.name }}</div>
+            <div class="text-xs text-muted">
+              {{ c.slug }} · {{ c.n_books }} Bücher ·
+              @for (m of c.members; track m.slug) {
+                <span class="inline-block bg-panel2 border border-edge rounded-full px-2 py-0.5 mr-1">
+                  {{ m.name }}
+                </span>
+              }
+            </div>
+          </div>
+          <div class="flex gap-2 text-sm shrink-0">
+            <button class="text-accent hover:underline" (click)="openCollectionChat(c)">
+              💬 Chat starten
+            </button>
+            <button class="text-red-400 hover:underline" (click)="deleteCollection(c)">löschen</button>
+          </div>
+        </div>
+      </div>
+    } @empty {
+      <div class="text-sm text-muted">Noch keine Sammelgruppen.</div>
+    }
+  </div>
 </div>

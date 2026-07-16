@@ -17,12 +17,18 @@ async def retrieve(
     embed_model: str,
     top_k: int,
     group_id: str | None = None,
+    group_ids: list[str] | None = None,
 ) -> list[models.ScoredPoint]:
+    """`group_ids` (z. B. aus einer Sammelgruppe expandiert) hat Vorrang vor `group_id`."""
     query_emb = (await ollama.embed([question], embed_model))[0]
     query_vec = l2_normalize(query_emb)
 
     query_filter = None
-    if group_id:
+    if group_ids:
+        query_filter = models.Filter(
+            must=[models.FieldCondition(key="group_id", match=models.MatchAny(any=group_ids))]
+        )
+    elif group_id:
         query_filter = models.Filter(
             must=[models.FieldCondition(key="group_id", match=models.MatchValue(value=group_id))]
         )
