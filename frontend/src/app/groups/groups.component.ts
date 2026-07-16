@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
 import { LibraryService } from '../library.service';
-import { Book, Group, UploadResult } from '../models';
+import { Book, Collection, Group, UploadResult } from '../models';
 
 @Component({
   selector: 'app-groups',
@@ -35,6 +35,12 @@ export class GroupsComponent {
   // Bücher je Gruppe (immer sichtbar = Dokumentenverwaltung)
   readonly booksByGroup = signal<Record<number, Book[]>>({});
 
+  // Sammelgruppen (bündeln Gruppen ohne Re-Upload)
+  readonly collections = signal<Collection[]>([]);
+  readonly colSlug = signal('');
+  readonly colName = signal('');
+  readonly colMembers = signal<Set<string>>(new Set());
+
   constructor() {
     void this.loadGroups();
   }
@@ -51,9 +57,48 @@ export class GroupsComponent {
         groups.map(async (g) => [g.id, await this.library.listBooks(g.id)] as const),
       );
       this.booksByGroup.set(Object.fromEntries(entries));
+      this.collections.set(await this.library.listCollections());
     } catch (e) {
       this.error.set(`Gruppen laden fehlgeschlagen: ${e}`);
     }
+  }
+
+  toggleMember(slug: string): void {
+    this.colMembers.update((set) => {
+      const next = new Set(set);
+      if (next.has(slug)) {
+        next.delete(slug);
+      } else {
+        next.add(slug);
+      }
+      return next;
+    });
+  }
+
+  async createCollection(): Promise<void> {
+    const slug = this.colSlug().trim();
+    const name = this.colName().trim();
+    const members = [...this.colMembers()];
+    if (!slug || !name || !members.length) return;
+    try {
+      await this.library.createCollection({ slug, name, member_slugs: members });
+      this.colSlug.set('');
+      this.colName.set('');
+      this.colMembers.set(new Set());
+      this.collections.set(await this.library.listCollections());
+    } catch (e) {
+      this.error.set(`Sammelgruppe anlegen fehlgeschlagen: ${e}`);
+    }
+  }
+
+  async deleteCollection(collection: Collection): Promise<void> {
+    await this.library.deleteCollection(collection.id);
+    this.collections.set(await this.library.listCollections());
+  }
+
+  /** Chat mit dieser Sammelgruppe vorausgewählt öffnen (Slug-Namensraum ist geteilt). */
+  openCollectionChat(collection: Collection): void {
+    void this.router.navigate(['/chat'], { queryParams: { group: collection.slug } });
   }
 
   async createGroup(): Promise<void> {

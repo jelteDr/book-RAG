@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlmodel import select
 
 from app.config import settings
-from app.db.models import Book, Group
+from app.db.models import Book, CollectionMember, Group
 from app.db.session import session_factory
 from app.ingestion.pipeline import ingest_bytes
 
@@ -129,6 +129,16 @@ async def delete_group(group_id: int, request: Request) -> dict:
         for book in books:
             await request.app.state.vectors.delete_by_book(book.book_key)
             await session.delete(book)
+        # Mitgliedschaften in Sammelgruppen mit entfernen (sonst zeigen sie ins Leere).
+        memberships = (
+            await session.exec(
+                select(CollectionMember).where(CollectionMember.group_id == group_id)
+            )
+        ).all()
+        for m in memberships:
+            await session.delete(m)
+        # Abhängige Zeilen (Bücher, Mitgliedschaften) vor der Gruppe rausflushen (FK-Reihenfolge).
+        await session.flush()
         await session.delete(group)
         await session.commit()
         return {"deleted_group": group_id, "deleted_books": len(books)}

@@ -55,6 +55,32 @@ class Book(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class Collection(SQLModel, table=True):
+    """Eine Sammelgruppe: fasst mehrere Gruppen zusammen (z. B. Genre über Franchises).
+
+    Kein Kopieren von Daten — beim Retrieval expandiert der Collection-Slug zu einem
+    group_id-IN-Filter über die Mitglieds-Slugs. Slugs von Gruppen und Collections
+    teilen sich einen Namensraum (der Chat übergibt nur einen String).
+    """
+
+    __tablename__ = "collections"
+
+    id: int | None = Field(default=None, primary_key=True)
+    slug: str = Field(unique=True, index=True)
+    name: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CollectionMember(SQLModel, table=True):
+    """Mitgliedschaft einer Gruppe in einer Sammelgruppe (m:n)."""
+
+    __tablename__ = "collection_members"
+
+    id: int | None = Field(default=None, primary_key=True)
+    collection_id: int = Field(foreign_key="collections.id", index=True)
+    group_id: int = Field(foreign_key="groups.id", index=True)
+
+
 class Conversation(SQLModel, table=True):
     """Eine gespeicherte Unterhaltung."""
 

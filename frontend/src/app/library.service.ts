@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-import { Book, Group, MetricsRow, ModelInfo, UploadResult } from './models';
+import { Book, Collection, Group, MetricsRow, ModelInfo, UploadResult } from './models';
 
 /** REST-Zugriff auf Gruppen, Bücher, Modell-Metadaten und Metriken (via /api-Proxy). */
 @Injectable({ providedIn: 'root' })
@@ -25,6 +25,22 @@ export class LibraryService {
 
   async deleteGroup(id: number): Promise<void> {
     await fetch(`/api/groups/${id}`, { method: 'DELETE' });
+  }
+
+  listCollections(): Promise<Collection[]> {
+    return this.json('/api/collections');
+  }
+
+  createCollection(body: { slug: string; name: string; member_slugs: string[] }): Promise<Collection> {
+    return this.json('/api/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async deleteCollection(id: number): Promise<void> {
+    await fetch(`/api/collections/${id}`, { method: 'DELETE' });
   }
 
   listBooks(groupId: number): Promise<Book[]> {

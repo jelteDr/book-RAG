@@ -242,6 +242,24 @@
                   }
                 </button>
               }
+              @if (collections().length) {
+                <div class="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted border-t border-edge mt-1">
+                  Sammelgruppen
+                </div>
+                @for (c of collections(); track c.id) {
+                  <button
+                    class="w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center justify-between gap-3"
+                    [class.text-accent]="c.slug === selectedGroup()"
+                    [class.text-ink]="c.slug !== selectedGroup()"
+                    (click)="selectGroup(c.slug)"
+                  >
+                    <span class="truncate">{{ c.name }}</span>
+                    @if (c.slug === selectedGroup()) {
+                      <span class="shrink-0">✓</span>
+                    }
+                  </button>
+                }
+              }
             </div>
           }
         </div>

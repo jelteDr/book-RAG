@@ -18,7 +18,7 @@ from app.clients.qdrant_client import VectorStore
 from app.config import Settings
 from sqlmodel import col, select
 
-from app.db.models import ChatMessage, Conversation, QueryLog
+from app.db.models import ChatMessage, Collection, CollectionMember, Conversation, Group, QueryLog
 from app.rag.citations import extract_citations, sources_overview
 from app.rag.prompt_builder import build_messages
 from app.rag.retriever import retrieve
@@ -76,7 +76,8 @@ class RagService:
         try:
             points = await retrieve(
                 retrieval_query, ollama=self._ollama, vectors=self._vectors,
-                embed_model=self._settings.embed_model, top_k=fetch_k, group_id=group_id,
+                embed_model=self._settings.embed_model, top_k=fetch_k,
+                group_ids=await self._resolve_group_ids(group_id),
             )
         except Exception as exc:  # Ollama/Qdrant nicht erreichbar
             yield "error", {"message": f"Retrieval fehlgeschlagen: {exc}"}
@@ -137,6 +138,33 @@ class RagService:
         await self._log_query(question, model, group_id, done)
         await self._save_assistant(conversation_id, answer, model, done["sources"])
         yield "done", done
+
+    async def _resolve_group_ids(self, group_id: str | None) -> list[str] | None:
+        """Expandiert einen Sammelgruppen-Slug zu den Mitglieds-Slugs.
+
+        Ein normaler Gruppen-Slug (oder None) läuft unverändert durch — das
+        Ergebnis geht als group_ids-Filter (MatchAny) an den Retriever.
+        """
+        if not group_id or self._session_factory is None:
+            return [group_id] if group_id else None
+        try:
+            async with self._session_factory() as session:
+                collection = (
+                    await session.exec(select(Collection).where(Collection.slug == group_id))
+                ).first()
+                if collection is None:
+                    return [group_id]
+                members = (
+                    await session.exec(
+                        select(Group.slug)
+                        .join(CollectionMember, col(CollectionMember.group_id) == col(Group.id))
+                        .where(CollectionMember.collection_id == collection.id)
+                    )
+                ).all()
+                # Leere Sammelgruppe: lieber 0 Treffer als ungefiltert ALLE Gruppen.
+                return list(members) or [group_id]
+        except Exception:
+            return [group_id]
 
     async def _ensure_conversation(
         self, conversation_id: int | None, question: str, group_id: str | None

@@ -62,6 +62,14 @@ export interface Group {
   n_books?: number;
 }
 
+export interface Collection {
+  id: number;
+  slug: string;
+  name: string;
+  members: { slug: string; name: string }[];
+  n_books: number;
+}
+
 export interface Book {
   id: number;
   book_key: string;

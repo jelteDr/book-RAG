@@ -11,7 +11,7 @@ import { ActivatedRoute } from '@angular/router';
 
 import { ChatService } from '../chat.service';
 import { LibraryService } from '../library.service';
-import { Conversation, Group, Message, Source } from '../models';
+import { Collection, Conversation, Group, Message, Source } from '../models';
 
 interface Segment {
   text: string;
@@ -33,6 +33,7 @@ export class ChatComponent implements OnDestroy {
   readonly models = signal<string[]>([]);
   readonly selectedModel = signal('');
   readonly groups = signal<Group[]>([]);
+  readonly collections = signal<Collection[]>([]);
   readonly selectedGroup = signal('');
   readonly conversations = signal<Conversation[]>([]);
   readonly currentConversationId = signal<number | null>(null);
@@ -52,7 +53,10 @@ export class ChatComponent implements OnDestroy {
 
   /** Unterhaltungen nach Gruppe gebündelt (für die Sidebar). */
   readonly groupedConversations = computed(() => {
-    const nameBySlug = new Map(this.groups().map((g) => [g.slug, g.name]));
+    const nameBySlug = new Map([
+      ...this.groups().map((g) => [g.slug, g.name] as const),
+      ...this.collections().map((c) => [c.slug, c.name] as const),
+    ]);
     const buckets = new Map<string, { key: string; label: string; items: Conversation[] }>();
     for (const c of this.conversations()) {
       const key = c.group_id ?? '';
@@ -88,9 +92,17 @@ export class ChatComponent implements OnDestroy {
     } catch {
       this.groups.set([]);
     }
-    // Aus „Chat starten" in der Dokumente-View: Gruppe per ?group=<slug> vorauswählen.
+    try {
+      this.collections.set(await this.library.listCollections());
+    } catch {
+      this.collections.set([]);
+    }
+    // Aus „Chat starten" in der Dokumente-View: Gruppe/Sammelgruppe per ?group=<slug> vorauswählen.
     const preset = this.route.snapshot.queryParamMap.get('group');
-    if (preset && this.groups().some((g) => g.slug === preset)) {
+    const known =
+      this.groups().some((g) => g.slug === preset) ||
+      this.collections().some((c) => c.slug === preset);
+    if (preset && known) {
       this.selectedGroup.set(preset);
       this.newChat();
     }
@@ -135,7 +147,11 @@ export class ChatComponent implements OnDestroy {
   readonly selectedGroupLabel = computed(() => {
     const slug = this.selectedGroup();
     if (!slug) return 'Alle Gruppen';
-    return this.groups().find((g) => g.slug === slug)?.name ?? slug;
+    return (
+      this.groups().find((g) => g.slug === slug)?.name ??
+      this.collections().find((c) => c.slug === slug)?.name ??
+      slug
+    );
   });
 
   toggleGroupMenu(): void {
