@@ -19,8 +19,7 @@ export class GroupsComponent {
   readonly groups = signal<Group[]>([]);
   readonly error = signal('');
 
-  // Formular "neue Gruppe"
-  readonly slug = signal('');
+  // Formular "neue Gruppe" (Slug erzeugt das Backend aus dem Namen)
   readonly name = signal('');
   readonly kind = signal('');
 
@@ -35,9 +34,8 @@ export class GroupsComponent {
   // Bücher je Gruppe (immer sichtbar = Dokumentenverwaltung)
   readonly booksByGroup = signal<Record<number, Book[]>>({});
 
-  // Sammelgruppen (bündeln Gruppen ohne Re-Upload)
+  // Sammelgruppen (bündeln Gruppen ohne Re-Upload; Slug erzeugt das Backend)
   readonly collections = signal<Collection[]>([]);
-  readonly colSlug = signal('');
   readonly colName = signal('');
   readonly colMembers = signal<Set<string>>(new Set());
 
@@ -76,13 +74,11 @@ export class GroupsComponent {
   }
 
   async createCollection(): Promise<void> {
-    const slug = this.colSlug().trim();
     const name = this.colName().trim();
     const members = [...this.colMembers()];
-    if (!slug || !name || !members.length) return;
+    if (!name || !members.length) return;
     try {
-      await this.library.createCollection({ slug, name, member_slugs: members });
-      this.colSlug.set('');
+      await this.library.createCollection({ name, member_slugs: members });
       this.colName.set('');
       this.colMembers.set(new Set());
       this.collections.set(await this.library.listCollections());
@@ -102,17 +98,14 @@ export class GroupsComponent {
   }
 
   async createGroup(): Promise<void> {
-    const slug = this.slug().trim();
     const name = this.name().trim();
-    if (!slug || !name) return;
+    if (!name) return;
     try {
       await this.library.createGroup({
-        slug,
         name,
         kind: this.kind().trim() || null,
         description: null,
       });
-      this.slug.set('');
       this.name.set('');
       this.kind.set('');
       await this.loadGroups();
