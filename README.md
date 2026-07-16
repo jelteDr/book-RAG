@@ -62,6 +62,10 @@ Angular (minimal, Signals) ──REST + SSE──► FastAPI (Python 3.12)
   inkl. Vergleichs-Barplots; Modell-Metadaten (Parameter, Quantisierung, Kontext) aus Ollama.
 - **Optionale Qualitäts-Services** (opt-in): Cross-Encoder-**Reranker** (`bge-reranker-v2-m3`)
   und **NLI-Faithfulness-Check**, der ungestützte Zitate im Frontend mit ⚠ markiert.
+- **Contextual Ingestion** (opt-in, `CONTEXTUAL_INGEST_ENABLED`): Beim Ingest generiert das
+  LLM pro Chunk 1–2 Sätze Kontext (Pronomen aufgelöst), die nur ins Embedding eingehen —
+  **stärkster gemessener Retrieval-Hebel** (Exp 5: MRR +0.182). Bestehende Bücher lassen
+  sich ohne Originaldatei umstellen (`app.ingestion.reembed_cli`).
 - **Serving-Metriken** pro Anfrage: TTFT, TPS, Tokens.
 
 ## Schnellstart (macOS, Apple Silicon)

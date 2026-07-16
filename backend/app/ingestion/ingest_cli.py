@@ -36,6 +36,8 @@ async def _run(args: argparse.Namespace) -> None:
             dry_run=not args.commit,
             title=args.title,
             author=args.author,
+            contextual=args.contextual or settings.contextual_ingest_enabled,
+            context_model=settings.chat_model,
         )
     finally:
         await ollama.aclose()
@@ -64,6 +66,8 @@ def main() -> None:
     ap.add_argument("--title")
     ap.add_argument("--author")
     ap.add_argument("--commit", action="store_true", help="Ohne dieses Flag: Dry-Run")
+    ap.add_argument("--contextual", action="store_true",
+                    help="LLM-Kontext pro Chunk ins Embedding (Exp 5; ~4-6 s/Chunk)")
     ap.add_argument("--ollama-url", default=settings.ollama_base_url)
     ap.add_argument("--qdrant-url", default=settings.qdrant_url)
     ap.add_argument("--embed-model", default=settings.embed_model)

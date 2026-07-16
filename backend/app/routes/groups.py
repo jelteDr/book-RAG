@@ -119,6 +119,8 @@ async def upload_to_group(
             dry_run=not commit,
             title=title,
             author=author,
+            contextual=settings.contextual_ingest_enabled,
+            context_model=settings.chat_model,
         )
 
         # Fallback: kein Gutenberg-Titel + kein manueller Titel -> Dateiname (statt Buch-Key).
