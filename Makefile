@@ -5,7 +5,7 @@ FRONTEND_PORT ?= 4200
 BACKEND_PORT  ?= 8001
 
 .DEFAULT_GOAL := help
-.PHONY: help up down restart clean setup models ollama-host ingest eval logs ps
+.PHONY: help up up-ml down restart clean setup models ollama-host ingest eval logs ps
 
 help: ## Diese Übersicht anzeigen
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -17,6 +17,13 @@ up: ## Alles starten (Qdrant + Backend + Frontend) via docker compose
 	@echo "Frontend:  http://localhost:$(FRONTEND_PORT)"
 	@echo "Backend:   http://localhost:$(BACKEND_PORT)/health"
 	@echo "Falls /health 'ollama:false' zeigt: einmalig 'make ollama-host' + Ollama-App neu starten."
+
+up-ml: ## Wie 'up', aber mit Reranker + Faithfulness (grosses Image: torch!)
+	INSTALL_ML_EXTRAS=true RERANKER_ENABLED=true FAITHFULNESS_CHECK_ENABLED=true \
+		docker compose up -d --build
+	@echo ""
+	@echo "ML-Extras aktiv. Status: curl http://localhost:$(BACKEND_PORT)/health"
+	@echo "Achtung: Reranker + NLI + Ollama gleichzeitig ist auf 24 GB RAM knapp."
 
 down: ## Alle Container stoppen (Volumes/Daten bleiben erhalten)
 	docker compose down
