@@ -43,13 +43,27 @@ export class ChatComponent implements OnDestroy {
   readonly streaming = signal(false);
   readonly expanded = signal<Source | null>(null);
 
-  /** Wechselnde Status-Wörter, solange das Modell „denkt" (vor dem ersten Token). */
-  private readonly thinkingWords = ['Denken', 'Grübeln', 'Sucht Quellen', 'Liest Kontext', 'Formuliert'];
+  /** Wechselnde Status-Sprüche, solange das Modell „denkt" (vor dem ersten Token). */
+  private readonly thinkingWords = [
+    'Denken',
+    'Grübeln',
+    'Sucht Quellen',
+    'Liest Kontext',
+    'Zeit für einen Schluck Kaffee',
+    'Formuliert',
+    'Tee aufsetzen lohnt sich',
+    'Quellen werden gewogen',
+    'Keks dazu?',
+  ];
   private readonly thinkingIndex = signal(0);
   private thinkingTimer: ReturnType<typeof setInterval> | null = null;
   readonly thinkingWord = computed(
     () => this.thinkingWords[this.thinkingIndex() % this.thinkingWords.length],
   );
+
+  /** Tickender Sekundenzähler über die gesamte Generierung (Denk-Phase + Streaming). */
+  readonly elapsedSeconds = signal(0);
+  private elapsedTimer: ReturnType<typeof setInterval> | null = null;
 
   /** Unterhaltungen nach Gruppe gebündelt (für die Sidebar). */
   readonly groupedConversations = computed(() => {
@@ -186,7 +200,10 @@ export class ChatComponent implements OnDestroy {
   private startThinking(): void {
     this.thinkingIndex.set(0);
     this.stopThinking();
-    this.thinkingTimer = setInterval(() => this.thinkingIndex.update((i) => i + 1), 1200);
+    // 2 s Takt, damit auch die längeren Sprüche lesbar bleiben.
+    this.thinkingTimer = setInterval(() => this.thinkingIndex.update((i) => i + 1), 2000);
+    this.elapsedSeconds.set(0);
+    this.elapsedTimer = setInterval(() => this.elapsedSeconds.update((s) => s + 1), 1000);
   }
 
   private stopThinking(): void {
@@ -194,6 +211,15 @@ export class ChatComponent implements OnDestroy {
       clearInterval(this.thinkingTimer);
       this.thinkingTimer = null;
     }
+    if (this.elapsedTimer !== null) {
+      clearInterval(this.elapsedTimer);
+      this.elapsedTimer = null;
+    }
+  }
+
+  /** Millisekunden hübsch als Sekunden, z. B. 9358 -> "9,4 s". */
+  fmtSecs(ms: number): string {
+    return `${(ms / 1000).toFixed(1).replace('.', ',')} s`;
   }
 
   ngOnDestroy(): void {

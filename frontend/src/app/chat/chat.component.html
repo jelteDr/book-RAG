@@ -122,9 +122,9 @@
                 }
               }
               @if (msg.meta) {
-                <div class="mt-2 text-[11px] text-muted">
-                  {{ msg.meta.model }} · TTFT {{ msg.meta.ttft_ms }} ms · {{ msg.meta.e2e_ms }} ms ·
-                  {{ msg.meta.tps }} tok/s
+                <div class="mt-2 text-[11px] text-muted tabular-nums">
+                  {{ msg.meta.model }} · TTFT {{ fmtSecs(msg.meta.ttft_ms) }} · gesamt
+                  {{ fmtSecs(msg.meta.e2e_ms) }} · {{ msg.meta.tps }} tok/s
                 </div>
               }
             } @else {
@@ -140,6 +140,7 @@
           >
             @if (draft()) {
               {{ draft() }}<span class="opacity-50">▊</span>
+              <div class="mt-1.5 text-[11px] text-muted tabular-nums">⏱ {{ elapsedSeconds() }} s</div>
             } @else {
               <span class="inline-flex items-center gap-2 text-muted italic">
                 <span class="flex gap-1">
@@ -148,6 +149,7 @@
                   <span class="w-1.5 h-1.5 rounded-full bg-muted animate-bounce"></span>
                 </span>
                 {{ thinkingWord() }}…
+                <span class="not-italic text-[11px] tabular-nums">· {{ elapsedSeconds() }} s</span>
               </span>
             }
           </div>
