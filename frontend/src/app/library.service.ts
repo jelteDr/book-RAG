@@ -15,7 +15,7 @@ export class LibraryService {
     return this.json('/api/groups');
   }
 
-  createGroup(body: Omit<Group, 'id' | 'n_books'>): Promise<Group> {
+  createGroup(body: { name: string; kind: string | null; description: string | null }): Promise<Group> {
     return this.json('/api/groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -31,7 +31,7 @@ export class LibraryService {
     return this.json('/api/collections');
   }
 
-  createCollection(body: { slug: string; name: string; member_slugs: string[] }): Promise<Collection> {
+  createCollection(body: { name: string; member_slugs: string[] }): Promise<Collection> {
     return this.json('/api/collections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

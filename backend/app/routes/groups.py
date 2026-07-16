@@ -9,18 +9,34 @@ from pydantic import BaseModel
 from sqlmodel import select
 
 from app.config import settings
-from app.db.models import Book, CollectionMember, Group
+from app.db.models import Book, Collection, CollectionMember, Group
 from app.db.session import session_factory
 from app.ingestion.pipeline import ingest_bytes
+from app.util import slugify
 
 router = APIRouter(tags=["groups"])
 
 
 class GroupCreate(BaseModel):
-    slug: str
+    # Slug ist optional (UI schickt keinen mehr) — er wird aus dem Namen abgeleitet.
+    slug: str | None = None
     name: str
     kind: str | None = None
     description: str | None = None
+
+
+async def unique_slug(session, name: str) -> str:
+    """Slug aus dem Namen ableiten, eindeutig über Gruppen UND Sammelgruppen (ein Namensraum)."""
+    base = slugify(name)
+    slug = base
+    n = 2
+    while (
+        (await session.exec(select(Group).where(Group.slug == slug))).first()
+        or (await session.exec(select(Collection).where(Collection.slug == slug))).first()
+    ):
+        slug = f"{base}-{n}"
+        n += 1
+    return slug
 
 
 def _group_dict(g: Group, n_books: int | None = None) -> dict:
@@ -39,10 +55,17 @@ def _book_dict(b: Book) -> dict:
 
 @router.post("/groups")
 async def create_group(body: GroupCreate) -> dict:
+    if not body.name.strip():
+        raise HTTPException(status_code=422, detail="name ist Pflicht")
     async with session_factory() as session:
-        if (await session.exec(select(Group).where(Group.slug == body.slug))).first():
-            raise HTTPException(status_code=409, detail=f"Gruppe existiert bereits: {body.slug}")
-        group = Group(**body.model_dump())
+        if body.slug:
+            # Explizit übergebener Slug (API-Nutzung) muss frei sein.
+            if (await session.exec(select(Group).where(Group.slug == body.slug))).first():
+                raise HTTPException(status_code=409, detail=f"Gruppe existiert bereits: {body.slug}")
+            slug = body.slug
+        else:
+            slug = await unique_slug(session, body.name)
+        group = Group(slug=slug, name=body.name.strip(), kind=body.kind, description=body.description)
         session.add(group)
         await session.commit()
         await session.refresh(group)

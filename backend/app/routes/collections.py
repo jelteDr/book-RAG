@@ -11,12 +11,14 @@ from sqlmodel import col, select
 
 from app.db.models import Book, Collection, CollectionMember, Group
 from app.db.session import session_factory
+from app.routes.groups import unique_slug
 
 router = APIRouter(tags=["collections"])
 
 
 class CollectionCreate(BaseModel):
-    slug: str
+    # Slug ist optional (UI schickt keinen mehr) — er wird aus dem Namen abgeleitet.
+    slug: str | None = None
     name: str
     member_slugs: list[str]
 
@@ -46,17 +48,20 @@ async def _collection_dict(session, collection: Collection) -> dict:
 
 @router.post("/collections")
 async def create_collection(body: CollectionCreate) -> dict:
-    slug = body.slug.strip()
-    if not slug or not body.name.strip():
-        raise HTTPException(status_code=422, detail="slug und name sind Pflicht")
+    if not body.name.strip():
+        raise HTTPException(status_code=422, detail="name ist Pflicht")
     if not body.member_slugs:
         raise HTTPException(status_code=422, detail="mindestens eine Mitglieds-Gruppe angeben")
     async with session_factory() as session:
-        # Ein Namensraum für Gruppen- und Collection-Slugs (der Chat sieht nur einen String).
-        if (await session.exec(select(Group).where(Group.slug == slug))).first():
-            raise HTTPException(status_code=409, detail=f"Slug gehört schon einer Gruppe: {slug}")
-        if (await session.exec(select(Collection).where(Collection.slug == slug))).first():
-            raise HTTPException(status_code=409, detail=f"Sammelgruppe existiert bereits: {slug}")
+        if body.slug:
+            slug = body.slug.strip()
+            # Ein Namensraum für Gruppen- und Collection-Slugs (der Chat sieht nur einen String).
+            if (await session.exec(select(Group).where(Group.slug == slug))).first():
+                raise HTTPException(status_code=409, detail=f"Slug gehört schon einer Gruppe: {slug}")
+            if (await session.exec(select(Collection).where(Collection.slug == slug))).first():
+                raise HTTPException(status_code=409, detail=f"Sammelgruppe existiert bereits: {slug}")
+        else:
+            slug = await unique_slug(session, body.name)
 
         members = (
             await session.exec(select(Group).where(col(Group.slug).in_(body.member_slugs)))
