@@ -184,12 +184,48 @@ zum Vergleich Reranker +0.035, Dedup +0.009). **Empfohlener nächster Schritt:**
 Kontext-Generierung als opt-in-Flag in die Ingestion-Pipeline (`CONTEXTUAL_INGEST_ENABLED`)
 und Re-Ingest; vorher mit Gold-Set v2 (Span-Metrik) gegenprüfen.
 
+## Gold-Set v2 — Span-Labels + Gegenprüfung (`eval/gold_v2.jsonl`)
+
+**Das Set:** 36 Items (26 fact / 3 paraphrase / 3 multi / 4 unanswerable). Labels sind
+**Text-Spans** (`book_id` + `char_start`/`char_end` im bereinigten Text) statt Kapitel —
+jede Passage wurde beim Kuratieren gelesen und gegen die Soll-Antwort verifiziert
+(Workflow aus `notebooks/gold_set_v2.ipynb`). Die 21 v1-Items wurden übernommen und
+mit Spans nachgerüstet; ihre Kapitel-Labels bleiben als Vergleichs-Feld erhalten.
+Die Datei enthält **keinen Buchtext** (nur eigene Formulierungen + Offsets) und ist
+deshalb committbar. Bemerkenswert: Bei mehreren Items (z. B. d09) liegen die echten
+Antwort-Passagen **außerhalb** der alten Kapitel-Labels.
+
+**Befund 1 — die Kapitel-Metrik überschätzt massiv.** Dieselben Retrieval-Läufe
+(Live-Index: contextual + dedup, n=32 beantwortbare Items, k=8), zwei Maßstäbe:
+
+| Metrik | kapitel-basiert | span-basiert |
+|---|---|---|
+| Hit-Rate@1 | 0.50 | **0.31** |
+| Hit-Rate@8 | 0.88 | **0.81** |
+| MRR | 0.636 | **0.474** |
+
+Ø MRR-Differenz **+0.162** — „richtiges Kapitel, falsche Passage" zählte bisher als
+Treffer. Alle früheren Absolutwerte sind entsprechend zu lesen.
+
+**Befund 2 — Gegenprüfung Exp 5 (Contextual) mit fairer Metrik.** Paired plain vs.
+contextual (rohe dense-Suche ohne Dedup, Span-Metrik, n=32):
+
+| Metrik | plain | + Kontext | Δ |
+|---|---|---|---|
+| Hit-Rate@8 | 0.688 | **0.812** | +0.12 |
+| MRR | 0.408 | **0.462** | +0.054 |
+
+Gepaarte Bilanz 12 besser / 8 schlechter / 12 gleich. **Der Contextual-Gewinn ist
+real, aber deutlich kleiner als die Kapitel-Metrik suggerierte** (+0.054 statt
++0.182 MRR; bei n=32 nicht signifikant). Belastbar ist vor allem der Hit-Rate@8-Gewinn:
+4 zusätzliche Fragen bekommen eine antwort-tragende Passage in die Top-8. Ein Teil des
+Exp-5-Effekts war also „landet öfter irgendwo im richtigen Kapitel" — genau die Sorte
+Verzerrung, für deren Aufdeckung das v2-Set gebaut wurde.
+
 ## Nächste Schritte
 
-1. **Gold-Set v2 mit Span-Labels** (in Kuration, `notebooks/gold_set_v2.ipynb`):
-   passagen-genaue Labels statt Kapitel (Ø 30,2 von 581 Chunks zählen unter einem
-   Kapitel-Label als Treffer — die Metrik ist massiv zu gnädig), n≥30–50; danach
-   `retrieval_eval.py` auf Span-Overlap umstellen (Kapitel-Arm als Vergleich behalten).
+1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
+   Span-Metrik. Ausbau auf n≥50 und `question_en` für die neuen Items bleibt sinnvoll.
 2. ~~Exp 5 — Contextual Retrieval~~ ✅ gemessen (+0.182 MRR, s. o.) — offen ist die
    **Produktivierung**: `CONTEXTUAL_INGEST_ENABLED`-Flag in der Ingestion-Pipeline + Re-Ingest.
 3. **Exp 6 — Sparse-Hybrid** mit bge-m3-eigenen Sparse-Gewichten statt BM25
