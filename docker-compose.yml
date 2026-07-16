@@ -21,7 +21,11 @@ services:
       start_period: 10s
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        # true -> torch/sentence-transformers ins Image (fuer Reranker/Faithfulness).
+        INSTALL_ML_EXTRAS: ${INSTALL_ML_EXTRAS:-false}
     ports:
       # Host-Port 8001 (8000 ist auf diesem Rechner belegt); Container-intern bleibt 8000.
       - "${BACKEND_PORT:-8001}:8000"
@@ -33,11 +37,16 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-book_chunks}
       - TOP_K=${TOP_K:-8}
+      # Opt-in-Qualitaets-Services (brauchen INSTALL_ML_EXTRAS=true beim Build).
+      - RERANKER_ENABLED=${RERANKER_ENABLED:-false}
+      - FAITHFULNESS_CHECK_ENABLED=${FAITHFULNESS_CHECK_ENABLED:-false}
       - DATABASE_URL=postgresql+asyncpg://bookrag:bookrag@postgres:5432/bookrag
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/data
+      # HuggingFace-Cache persistieren: Reranker/NLI-Modelle (~2 GB) ueberleben Rebuilds.
+      - hf_cache:/root/.cache/huggingface
     depends_on:
       qdrant:
         condition: service_healthy
@@ -83,3 +92,4 @@ services:
 volumes:
   qdrant_storage:
   postgres_data:
+  hf_cache:
