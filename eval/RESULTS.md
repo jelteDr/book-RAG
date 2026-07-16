@@ -132,15 +132,38 @@ Pro Gold-Frage (n=21) wird die volle RAG-Pipeline ausgeführt (Modell `qwen2.5:7
   oder ungestützte Modell-Zusätze) — bewusst statt PPL gewählt, das nur Fluenz misst.
 - Roh-Ergebnisse pro Frage: `results/answer_eval.json`.
 
+## Exp 4 — Overlap-Dedup im Retrieval (`eval/dedup_experiment.py`)
+
+**Frage:** Der Chunker arbeitet mit ~200 Zeichen Overlap — wie oft belegen dadurch
+*dieselben* Passagen mehrere Top-k-Plätze, und was bringt Deduplizierung?
+
+**Setup:** paired auf denselben 21 Fragen (Gruppe `Horror`, k=8, kapitel-basierte
+Metrik wie Exp 1–3). Arme: `baseline` (Suche wie bisher) vs. `dedup` (k+8 Kandidaten
+holen, überlappende Zeichenbereiche desselben Buchs deduplizieren, auf k kürzen).
+
+| Messgröße | baseline | dedup |
+|---|---|---|
+| Fragen mit ≥1 Duplikat in Top-8 | 16/21 (Ø 1,33) | 0 |
+| Ø verschiedene Kapitel in Top-8 | 4,71 | **5,52** |
+| Hit-Rate@8 | 0,810 | **0,857** |
+| MRR | 0,556 | **0,565** |
+
+Gepaarte MRR-Bilanz: **2 besser / 0 schlechter / 19 gleich** — ein seltener Fall
+ohne Downside: Duplikate raus = mehr *verschiedene* Information im Prompt, und in
+2 Fällen rückt dadurch ein relevantes Kapitel neu in die Top-8. Der Haupteffekt
+(mehr nutzbarer Kontext fürs LLM) liegt außerhalb dieser Retrieval-Metrik und
+sollte sich in der Antwortqualität zeigen. **Konsequenz: Dedup ist in
+`app/rag/retriever.py` produktiv aktiv** (Puffer `DEDUP_EXTRA=8`).
+
 ## Nächste Schritte
 
 1. **Gold-Set v2 mit Span-Labels** (in Kuration, `notebooks/gold_set_v2.ipynb`):
    passagen-genaue Labels statt Kapitel (Ø 30,2 von 581 Chunks zählen unter einem
    Kapitel-Label als Treffer — die Metrik ist massiv zu gnädig), n≥30–50; danach
    `retrieval_eval.py` auf Span-Overlap umstellen (Kapitel-Arm als Vergleich behalten).
-2. **Exp 4 — Contextual Retrieval:** LLM-generierter Chunk-Kontext beim Embedden
+2. **Exp 5 — Contextual Retrieval:** LLM-generierter Chunk-Kontext beim Embedden
    (paired dense vs. dense+kontext).
-3. **Exp 5 — Sparse-Hybrid** mit bge-m3-eigenen Sparse-Gewichten statt BM25
+3. **Exp 6 — Sparse-Hybrid** mit bge-m3-eigenen Sparse-Gewichten statt BM25
    (adressiert das cross-linguale Handicap aus Exp 2); dabei auch `bm25_en`-Arm.
 4. Bootstrap-CI / paired Test, sobald n≥30.
 5. ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in via
