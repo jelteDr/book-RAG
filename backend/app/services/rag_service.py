@@ -227,23 +227,20 @@ class RagService:
     async def _save_assistant(
         self, conversation_id: int | None, answer: str, model: str, sources: list[dict]
     ) -> None:
-        """Speichert die Assistenten-Antwort (leichte Quell-Liste, kein Chunk-Text)."""
+        """Speichert die Assistenten-Antwort inkl. vollständiger Quellen.
+
+        Der Chunk-Text wird MIT gespeichert (~2 KB je Quelle): sonst sind die
+        Zitat-Chips nach dem Laden einer Unterhaltung leer, und die Passage soll
+        auch dann lesbar bleiben, wenn das Buch später gelöscht wird.
+        """
         if self._session_factory is None or conversation_id is None:
             return
-        light = [
-            {
-                "marker": s.get("marker"), "chapter": s.get("chapter"),
-                "score": s.get("score"), "book_title": s.get("book_title"),
-                "supported": s.get("supported"),
-            }
-            for s in sources
-        ]
         try:
             async with self._session_factory() as session:
                 session.add(
                     ChatMessage(
                         conversation_id=conversation_id, role="assistant",
-                        content=answer, model=model, sources=light,
+                        content=answer, model=model, sources=sources,
                     )
                 )
                 await session.commit()

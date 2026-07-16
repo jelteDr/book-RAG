@@ -103,7 +103,8 @@ class ChatMessage(SQLModel, table=True):
     role: str  # "user" | "assistant"
     content: str
     model: str | None = None
-    # Leichte Quell-Liste (marker/chapter/score/…), ohne vollen Chunk-Text.
+    # Vollständige Quell-Liste inkl. Chunk-Text (Chips bleiben nach dem Laden lesbar;
+    # ältere Zeilen können noch die frühere "leichte" Liste ohne Text enthalten).
     sources: list | None = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
