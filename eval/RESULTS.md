@@ -155,14 +155,43 @@ ohne Downside: Duplikate raus = mehr *verschiedene* Information im Prompt, und i
 sollte sich in der Antwortqualität zeigen. **Konsequenz: Dedup ist in
 `app/rag/retriever.py` produktiv aktiv** (Puffer `DEDUP_EXTRA=8`).
 
+## Exp 5 — Contextual Retrieval (`eval/contextual_experiment.py`)
+
+**Idee** (nach Anthropics „Contextual Retrieval"): Ein Chunk mitten aus Kapitel 12
+weiß nicht, dass „he" Jonathan Harker ist. Beim Ingest generiert `qwen2.5:7b`
+(temp=0) deshalb 1–2 Sätze Kontext pro Chunk (Figuren benannt, Pronomen aufgelöst,
+Ort/Geschehen), die **nur ins Embedding** eingehen — der anzeigbare Text bleibt
+unverändert. Einmalkosten: 581 LLM-Aufrufe (~1 h lokal), Kontexte gecheckpointet
+in `results/contextual_contexts.jsonl`, Embeddings in separater Collection.
+
+**Paired** auf denselben 21 Fragen (k=8, kapitel-basiert, dense vs. dense+Kontext,
+beide ohne Dedup — sauberer Einzelvergleich):
+
+| Metrik | baseline | + Kontext | Δ |
+|---|---|---|---|
+| Hit-Rate@8 | 0.810 | **0.952** | +0.14 |
+| MRR | 0.556 | **0.738** | **+0.182** |
+
+Gepaarte MRR-Bilanz: **10 besser / 2 schlechter / 9 gleich** (Vorzeichentest
+p≈0.04 — als einziges Experiment bisher auch bei n=21 nominell signifikant).
+**Beide hartnäckigen Alt-Misses werden gerettet:** d01 (Harkers Reisegrund,
+MISS→Rang 2) und d13 (MISS→Rang 1); d14 springt von Rang 6 auf 1. Kosten:
+2 Regressionen (d05 1→3, d20 2→8) — vermutlich Kontext-Halluzinationen einzelner
+Chunks (der LLM-Kontext ist nicht fehlerfrei, siehe Checkpoint-Datei).
+
+**Einordnung:** Der mit Abstand stärkste bisher gemessene Einzelhebel (+0.18 MRR;
+zum Vergleich Reranker +0.035, Dedup +0.009). **Empfohlener nächster Schritt:**
+Kontext-Generierung als opt-in-Flag in die Ingestion-Pipeline (`CONTEXTUAL_INGEST_ENABLED`)
+und Re-Ingest; vorher mit Gold-Set v2 (Span-Metrik) gegenprüfen.
+
 ## Nächste Schritte
 
 1. **Gold-Set v2 mit Span-Labels** (in Kuration, `notebooks/gold_set_v2.ipynb`):
    passagen-genaue Labels statt Kapitel (Ø 30,2 von 581 Chunks zählen unter einem
    Kapitel-Label als Treffer — die Metrik ist massiv zu gnädig), n≥30–50; danach
    `retrieval_eval.py` auf Span-Overlap umstellen (Kapitel-Arm als Vergleich behalten).
-2. **Exp 5 — Contextual Retrieval:** LLM-generierter Chunk-Kontext beim Embedden
-   (paired dense vs. dense+kontext).
+2. ~~Exp 5 — Contextual Retrieval~~ ✅ gemessen (+0.182 MRR, s. o.) — offen ist die
+   **Produktivierung**: `CONTEXTUAL_INGEST_ENABLED`-Flag in der Ingestion-Pipeline + Re-Ingest.
 3. **Exp 6 — Sparse-Hybrid** mit bge-m3-eigenen Sparse-Gewichten statt BM25
    (adressiert das cross-linguale Handicap aus Exp 2); dabei auch `bm25_en`-Arm.
 4. Bootstrap-CI / paired Test, sobald n≥30.
