@@ -40,6 +40,8 @@ services:
       # Opt-in-Qualitaets-Services (brauchen INSTALL_ML_EXTRAS=true beim Build).
       - RERANKER_ENABLED=${RERANKER_ENABLED:-false}
       - FAITHFULNESS_CHECK_ENABLED=${FAITHFULNESS_CHECK_ENABLED:-false}
+      # Opt-in Contextual Ingestion (Exp 5): LLM-Kontext je Chunk beim Upload (~4-6 s/Chunk).
+      - CONTEXTUAL_INGEST_ENABLED=${CONTEXTUAL_INGEST_ENABLED:-false}
       - DATABASE_URL=postgresql+asyncpg://bookrag:bookrag@postgres:5432/bookrag
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -14,6 +14,7 @@ from app.clients.ollama_client import OllamaClient
 from app.clients.qdrant_client import VectorStore
 from app.ingestion.chunker import chunk_book
 from app.ingestion.cleaner import clean
+from app.ingestion.contextualizer import embedding_text, generate_contexts
 from app.ingestion.parser import decode_bytes, parse_gutenberg, read_text
 from app.util import l2_normalize
 from app.validation import validate_document
@@ -69,6 +70,8 @@ async def ingest_text(
     dry_run: bool = True,
     title: str | None = None,
     author: str | None = None,
+    contextual: bool = False,
+    context_model: str | None = None,
 ) -> IngestResult:
     parsed = parse_gutenberg(raw_text)
     cleaned, report = clean(parsed.body)
@@ -88,7 +91,17 @@ async def ingest_text(
         )
 
     chunks = chunk_book(cleaned)
-    embeddings = await _embed_batched(ollama, [c.text for c in chunks], embed_model)
+
+    # Contextual Ingestion (opt-in, Exp 5): LLM-Kontext geht NUR ins Embedding,
+    # der anzeigbare Chunk-Text bleibt unverändert. Kostet ~4-6 s pro Chunk.
+    contexts: list[str] = [""] * len(chunks)
+    if contextual and context_model:
+        contexts = await generate_contexts(
+            ollama, context_model, title=res_title, chunks=chunks
+        )
+
+    embed_texts = [embedding_text(ctx, c.text) for ctx, c in zip(contexts, chunks, strict=True)]
+    embeddings = await _embed_batched(ollama, embed_texts, embed_model)
 
     points = [
         {
@@ -103,9 +116,10 @@ async def ingest_text(
                 "chunk_index": c.chunk_index,
                 "char_start": c.char_start,
                 "char_end": c.char_end,
+                **({"context": ctx} if ctx else {}),
             },
         }
-        for c, emb in zip(chunks, embeddings, strict=True)
+        for c, emb, ctx in zip(chunks, embeddings, contexts, strict=True)
     ]
 
     await vectors.ensure_collection()

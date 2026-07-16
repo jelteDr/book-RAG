@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     # Retrieval.
     top_k: int = 8
 
+    # Contextual Ingestion (optional, opt-in; Exp 5: +0.182 MRR).
+    # Beim Ingest generiert das Chat-LLM pro Chunk 1-2 Sätze Kontext (Pronomen
+    # aufgelöst, Ort/Geschehen), die NUR ins Embedding eingehen. Kostet ~4-6 s
+    # pro Chunk — ein Buch-Upload dauert damit deutlich länger.
+    contextual_ingest_enabled: bool = False
+
     # Cross-Encoder-Reranker (optional, opt-in; braucht die reranker-Dependency-Gruppe).
     reranker_enabled: bool = False
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
