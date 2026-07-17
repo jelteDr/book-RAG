@@ -1,0 +1,5 @@
+warning: `VIRTUAL_ENV=/Users/jeltedreetz/LLM/book-RAG/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+/Users/jeltedreetz/LLM/book-RAG/backend/.venv/lib/python3.12/site-packages/qdrant_client/async_qdrant_remote.py:225: UserWarning: Qdrant client version 1.18.0 is incompatible with server version 1.12.4. Major versions should match and minor version difference must not exceed 1. Set check_compatibility=False to skip version check.
+  show_warning(
+/Users/jeltedreetz/LLM/book-RAG/backend/.venv/lib/python3.12/site-packages/qdrant_client/async_qdrant_remote.py:225: UserWarning: Qdrant client version 1.18.0 is incompatible with server version 1.12.4. Major versions should match and minor version difference must not exceed 1. Set check_compatibility=False to skip version check.
+  show_warning(
