@@ -178,4 +178,4 @@ Git Flow: `main` (stabil) ← `develop` (Integration) ← `feature/*`. Commits a
 
 ## Lizenz
 
-[MIT](LICENSE). Demo-Texte von [Project Gutenberg](https://www.gutenberg.org) (gemeinfrei).
+[MIT](LICENSE). Demo-Texte von [Project Gutenberg](https://www.gutenberg.org).
