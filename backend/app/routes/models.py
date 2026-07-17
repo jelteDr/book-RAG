@@ -45,7 +45,16 @@ async def list_models(request: Request) -> dict:
             capabilities = None  # im Zweifel nicht filtern
         if capabilities is None or "completion" in capabilities:
             names.append(name)
-    return {"default": settings.chat_model, "available": names}
+
+    # Default auf die exakte Ollama-Schreibweise normalisieren: Tags sind
+    # case-insensitiv (q4_K_M == q4_k_m), das Frontend vergleicht aber exakt —
+    # sonst fällt die Vorauswahl still auf das erste Listen-Modell zurück.
+    default = settings.chat_model
+    for name in names:
+        if name.lower() == default.lower():
+            default = name
+            break
+    return {"default": default, "available": names}
 
 
 @router.get("/models/info")
