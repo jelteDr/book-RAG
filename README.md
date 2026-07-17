@@ -6,11 +6,6 @@ werden aufbereitet und indexiert, ein lokales LLM (via **Ollama**) beantwortet F
 Quell-Passage zurückführen (Grounding & Erklärbarkeit). Kern des Projekts ist eine
 **methodisch saubere, ehrliche Evaluation** der Retrieval- und Antwortqualität.
 
-> **Portfolio-Projekt** (Ziel: Data Scientist / ML Engineer). Es verbindet Engineering
-> (Ingestion-Pipeline, Streaming-API, Container, Service-Architektur) mit angewandter
-> Data Science (kontrollierte Experimente, Retrieval-Metriken, NLI-Faithfulness) — inklusive
-> **adversarieller Verifikation der eigenen Ergebnisse**.
-
 ## Demo
 
 Deutsche Frage → englischer Quelltext (cross-lingual) → gestreamte Antwort mit `[n]`-Zitaten;
@@ -19,9 +14,6 @@ Klick auf einen Marker zeigt die exakte Quell-Passage.
 **Ablauf:** Frage eintippen → Antwort wird tokenweise gestreamt (TTFT sichtbar) → jede Aussage
 trägt einen `[n]`-Marker → Klick auf einen Marker/Chip öffnet den zugehörigen Quell-Chunk mit
 Buch, Kapitel und Ähnlichkeits-Score. Lokal reproduzierbar via `make up` (siehe Schnellstart).
-
-> _Screencast/GIF hier einfügen (Screen-Recording der laufenden App unter http://localhost:4200)._
-> Die Evaluations-Charts weiter unten belegen die Ergebnisse quantitativ.
 
 ## Architektur
 
