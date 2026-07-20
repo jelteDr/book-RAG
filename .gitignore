@@ -38,3 +38,7 @@ reports/
 .DS_Store
 .idea/
 .vscode/
+
+# Kontext-Checkpoints sind Buchtext-Derivate — nie committen (Copyright!)
+/results/contextual_contexts.jsonl
+/results/*.log
