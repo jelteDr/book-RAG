@@ -2,16 +2,25 @@
 
 Pro Gold-Frage wird die volle RAG-Pipeline ausgefuehrt (retrieve -> Prompt -> LLM),
 dann werden gemessen:
-  - ANTWORT:  ROUGE-L, Antwort-Token-F1 (vs. Gold-Antwort), Faithfulness (NLI)
-  - RETRIEVAL: Recall@k (Kapitel-Abdeckung), MRR
-  - SERVING:  TTFT, TPS, e2e-Latenz (aus dem Streaming)
+  - ANTWORT:   ROUGE-L, Antwort-Token-F1 (vs. Gold-Antwort), Faithfulness (NLI)
+  - EHRLICHKEIT: Refusal-Rate auf unanswerable-Items (sagt das Modell "steht nicht
+    in den Quellen"?) und False-Refusal-Rate auf beantwortbaren Items
+  - RETRIEVAL: Hit-Rate@k + MRR — span-basiert (Gold-Set v2), Kapitel als Fallback
+  - SERVING:   TTFT, TPS, e2e-Latenz (aus dem Streaming)
 
 Faithfulness ersetzt bewusst PPL: gemessen wird, ob jede Antwort-Aussage von den
-abgerufenen Passagen GESTUeTZT wird (Entailment via mDeBERTa-xnli) — nicht blosse Fluenz.
+abgerufenen Passagen GESTUeTZT wird (Entailment via mDeBERTa-xnli) — nicht blosse
+Fluenz. Verweigerte Antworten gehen nicht in ROUGE/F1/Faithfulness ein (eine
+Verweigerung stellt keine stuetzbaren Behauptungen auf), sondern in die
+Refusal-Metriken.
+
+Diese Suite ist der STANDARD-ABSCHLUSS jedes Experiments: Retrieval-Metriken
+allein zeigen nicht, ob die Antwort dahinter besser wird.
 
 Aufruf (aus backend/):
   uv run --with rouge-score --with transformers --with torch --with sentencepiece \
          --with protobuf python ../eval/answer_eval.py
+Optional: --s2b aktiviert Small-to-Big (Exp 7) unabhaengig vom Env-Flag.
 """
 
 from __future__ import annotations
@@ -31,11 +40,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.clients.ollama_client import OllamaClient  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
+from app.rag.expander import expand_points  # noqa: E402
 from app.rag.prompt_builder import build_messages  # noqa: E402
 from app.rag.retriever import retrieve  # noqa: E402
-from retrieval_eval import chapter_roman  # noqa: E402
+from retrieval_eval import chapter_roman, span_hit  # noqa: E402
 
 NLI_MODEL = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+
+# Verweigerungs-Erkennung: typische Formulierungen des Prompt-Contracts ("Dazu
+# steht in den Quellen nichts.") plus Varianten; zusaetzlich gilt eine kurze
+# Antwort ganz ohne [n]-Zitat als Verweigerung.
+_REFUSAL_RE = re.compile(
+    r"(steht|finde|findet\s+sich|gibt\s+es)[^.]{0,60}"
+    r"(quellen|texten?)[^.]{0,40}(nichts|keine|nicht)"
+    r"|quellen\s+(reichen|enthalten)\s+nicht"
+    r"|keine\s+(information|angabe|informationen|angaben)",
+    re.IGNORECASE,
+)
+
+
+def is_refusal(answer: str) -> bool:
+    if _REFUSAL_RE.search(answer):
+        return True
+    return "[" not in answer and len(answer) < 200
 
 
 def normalize(text: str) -> list[str]:
@@ -128,10 +155,14 @@ class Faithfulness:
 
 async def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--gold", default=str(Path(__file__).resolve().parent / "gold_dracula.jsonl"))
+    ap.add_argument("--gold", default=str(Path(__file__).resolve().parent / "gold_v2.jsonl"))
     ap.add_argument("--group", default="Horror")
     ap.add_argument("--model", default=settings.chat_model)
     ap.add_argument("--k", type=int, default=settings.top_k)
+    ap.add_argument("--s2b", action="store_true",
+                    help="Small-to-Big (Exp 7) auf die Treffer anwenden, wie im Prod-Pfad")
+    ap.add_argument("--s2b-window", type=int, default=settings.s2b_window)
+    ap.add_argument("--s2b-top-n", type=int, default=settings.s2b_top_n)
     args = ap.parse_args()
 
     from rouge_score import rouge_scorer
@@ -147,59 +178,97 @@ async def main() -> None:
     rows = []
     try:
         for item in gold:
-            # v1: relevant_chapters; v2 (gold_v2.jsonl): chapters als Vergleichs-Feld.
-            relevant = {r.upper() for r in item.get("relevant_chapters") or item.get("chapters") or []}
+            unanswerable = item.get("qtype") == "unanswerable"
             pts = await retrieve(
                 item["question"], ollama=ollama, vectors=vectors,
                 embed_model=settings.embed_model, top_k=args.k, group_id=args.group,
             )
-            chunks = [(p.payload or {}).get("text", "") for p in pts]
-            chapters = [chapter_roman((p.payload or {}).get("chapter")) for p in pts]
+            if args.s2b:
+                pts = await expand_points(
+                    pts, vectors=vectors, window=args.s2b_window, top_n=args.s2b_top_n
+                )
+            payloads = [p.payload or {} for p in pts]
+            chunks = [pl.get("text", "") for pl in payloads]
 
             gen = await generate(ollama, build_messages(item["question"], pts), args.model)
+            refused = is_refusal(gen["answer"])
 
-            rougeL = rs.score(item["answer"], gen["answer"])["rougeL"].fmeasure
-            f1 = token_f1(gen["answer"], item["answer"])
-            faith_score = faith.score(gen["answer"], chunks)
-
-            hits = [i + 1 for i, c in enumerate(chapters) if c in relevant]
-            recall = len({c for c in chapters[: args.k] if c in relevant}) / len(relevant)
-            mrr = 1.0 / hits[0] if hits else 0.0
-
-            rows.append({
-                "id": item["id"], "rougeL": rougeL, "answer_f1": f1, "faithfulness": faith_score,
-                "recall_at_k": recall, "mrr": mrr,
+            row = {
+                "id": item["id"], "qtype": item.get("qtype", "fact"), "refused": refused,
                 "ttft_ms": gen["ttft_ms"], "tps": gen["tps"], "e2e_ms": gen["e2e_ms"],
-            })
-            print(f"  {item['id']}: ROUGE-L {rougeL:.2f}  F1 {f1:.2f}  Faith {faith_score:.2f}  "
-                  f"Recall@{args.k} {recall:.2f}  TTFT {gen['ttft_ms']:.0f}ms  TPS {gen['tps']:.1f}")
+            }
+
+            # Retrieval: span-basiert (v2); Kapitel nur als Fallback fuer v1-Gold-Dateien.
+            if item.get("spans"):
+                flags = [span_hit(pl, item) for pl in payloads]
+            else:
+                relevant = {r.upper() for r in item.get("relevant_chapters") or []}
+                flags = [chapter_roman(pl.get("chapter")) in relevant for pl in payloads] \
+                    if relevant else []
+            if flags:
+                first = next((i + 1 for i, f in enumerate(flags) if f), None)
+                row["hit_at_k"] = 1.0 if first else 0.0
+                row["mrr"] = 1.0 / first if first else 0.0
+
+            # Antwort-Metriken nur fuer beantwortete beantwortbare Items — eine
+            # Verweigerung stellt keine Behauptungen auf, die NLI stuetzen koennte.
+            if not unanswerable and not refused:
+                row["rougeL"] = rs.score(item["answer"], gen["answer"])["rougeL"].fmeasure
+                row["answer_f1"] = token_f1(gen["answer"], item["answer"])
+                row["faithfulness"] = faith.score(gen["answer"], chunks)
+
+            rows.append(row)
+            detail = (
+                f"refused={'JA' if refused else 'nein'}" if unanswerable or refused
+                else f"ROUGE-L {row['rougeL']:.2f}  F1 {row['answer_f1']:.2f}  "
+                     f"Faith {row['faithfulness']:.2f}"
+            )
+            rank = f"@{int(1 / row['mrr'])}" if row.get("mrr") else ("MISS" if flags else "—")
+            print(f"  {item['id']} [{row['qtype']}]: {detail}  span={rank}  "
+                  f"TTFT {gen['ttft_ms']:.0f}ms  TPS {gen['tps']:.1f}")
     finally:
         await ollama.aclose()
         await vectors.aclose()
 
-    def mean(key: str) -> float:
-        return sum(r[key] for r in rows) / len(rows)
+    def mean(sel: list[dict], key: str) -> float:
+        vals = [r[key] for r in sel if key in r]
+        return sum(vals) / len(vals) if vals else float("nan")
 
-    def median(key: str) -> float:
-        vals = sorted(r[key] for r in rows)
-        return vals[len(vals) // 2]
+    def median(sel: list[dict], key: str) -> float:
+        vals = sorted(r[key] for r in sel if key in r)
+        return vals[len(vals) // 2] if vals else float("nan")
 
-    print(f"\n=== Aggregat (n={len(rows)}, Modell={args.model}, k={args.k}) ===")
-    print("  ANTWORT:")
-    print(f"    ROUGE-L (mean):      {mean('rougeL'):.3f}")
-    print(f"    Antwort-F1 (mean):   {mean('answer_f1'):.3f}")
-    print(f"    Faithfulness (mean): {mean('faithfulness'):.3f}")
-    print("  RETRIEVAL:")
-    print(f"    Recall@{args.k} (mean): {mean('recall_at_k'):.3f}")
-    print(f"    MRR (mean):          {mean('mrr'):.3f}")
+    answerable = [r for r in rows if r["qtype"] != "unanswerable"]
+    unanswer = [r for r in rows if r["qtype"] == "unanswerable"]
+    answered = [r for r in answerable if not r["refused"]]
+
+    print(f"\n=== Aggregat (n={len(rows)}, Modell={args.model}, k={args.k}, "
+          f"s2b={'an' if args.s2b else 'aus'}) ===")
+    print(f"  ANTWORT (beantwortet, n={len(answered)}):")
+    print(f"    ROUGE-L (mean):      {mean(answered, 'rougeL'):.3f}")
+    print(f"    Antwort-F1 (mean):   {mean(answered, 'answer_f1'):.3f}")
+    print(f"    Faithfulness (mean): {mean(answered, 'faithfulness'):.3f}")
+    if unanswer:
+        hon = sum(r["refused"] for r in unanswer)
+        print("  EHRLICHKEIT:")
+        print(f"    Refusal-Rate (unanswerable, hoeher=besser): "
+              f"{hon / len(unanswer):.2f}  ({hon}/{len(unanswer)})")
+    false_ref = sum(r["refused"] for r in answerable)
+    print(f"    False-Refusal-Rate (beantwortbar, niedriger=besser): "
+          f"{false_ref / len(answerable):.2f}  ({false_ref}/{len(answerable)})")
+    print(f"  RETRIEVAL (span-basiert, n={sum(1 for r in answerable if 'mrr' in r)}):")
+    print(f"    Hit-Rate@{args.k} (mean): {mean(answerable, 'hit_at_k'):.3f}")
+    print(f"    MRR (mean):          {mean(answerable, 'mrr'):.3f}")
     print("  SERVING:")
-    print(f"    TTFT median:         {median('ttft_ms'):.0f} ms")
-    print(f"    TPS median:          {median('tps'):.1f} tok/s")
-    print(f"    e2e median:          {median('e2e_ms'):.0f} ms")
+    print(f"    TTFT median:         {median(rows, 'ttft_ms'):.0f} ms")
+    print(f"    TPS median:          {median(rows, 'tps'):.1f} tok/s")
+    print(f"    e2e median:          {median(rows, 'e2e_ms'):.0f} ms")
 
     out = Path(__file__).resolve().parent.parent / "results" / "answer_eval.json"
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps({"model": args.model, "k": args.k, "rows": rows}, indent=2))
+    out.write_text(json.dumps(
+        {"model": args.model, "k": args.k, "s2b": args.s2b, "rows": rows}, indent=2
+    ))
     print(f"\nRoh-Ergebnisse: {out}")
 
 
