@@ -33,6 +33,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
+from qdrant_client import models  # noqa: E402
+
 from app.clients.ollama_client import OllamaClient  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
@@ -142,8 +144,13 @@ async def run(gold_path: str, group_id: str, k: int) -> None:
 
         for item in gold:
             # dense: exakt der Live-Pfad (Ollama-Embedding, contextual Index).
+            # WICHTIG: mit group-Filter — ohne ihn verwässern fremde Gruppen die
+            # Kandidaten (derselbe latente Bug wie im Exp-2-dense-Arm!).
             q_emb = l2_normalize((await ollama.embed([item["question"]], settings.embed_model))[0])
-            dense_pts = await vectors.search(q_emb, CAND)
+            group_filter = models.Filter(
+                must=[models.FieldCondition(key="group_id", match=models.MatchValue(value=group_id))]
+            )
+            dense_pts = await vectors.search(q_emb, CAND, group_filter)
             dense_keys = [_key(p.payload) for p in dense_pts if p.payload]
 
             q_sparse = model.encode(

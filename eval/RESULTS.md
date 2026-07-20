@@ -222,6 +222,41 @@ real, aber deutlich kleiner als die Kapitel-Metrik suggerierte** (+0.054 statt
 Exp-5-Effekts war also „landet öfter irgendwo im richtigen Kapitel" — genau die Sorte
 Verzerrung, für deren Aufdeckung das v2-Set gebaut wurde.
 
+## Exp 6 — Sparse-Hybrid mit bge-m3-Sparse-Gewichten (`eval/sparse_hybrid_experiment.py`)
+
+**Idee:** Exp 2 zeigte, dass klassisches BM25 cross-lingual (DE-Frage/EN-Text)
+gehandicapt ist. bge-m3 liefert neben Dense auch **gelernte lexikalische Gewichte**
+über sein multilinguales Subword-Vokabular — die Hoffnung: lexikalische Präzision
+ohne den harten Sprachbruch. Gemessen gegen den Live-Index (Horror = contextual),
+die eigentliche Frage: bringt Sparse ZUSÄTZLICH zu Contextual-Dense noch etwas?
+
+**Setup:** Gold-Set v2 (n=32, span-basiert, k=8), Arme paired auf denselben Fragen:
+dense (Live-Pfad), sparse (FlagEmbedding-Lexical-Weights, CPU), RRF-Fusion (k=60,
+je 50 Kandidaten), sparse_en (englische Frage; n=21 Items mit `question_en`).
+
+| Arm | Hit@1 | Hit@8 | MRR |
+|---|---|---|---|
+| dense (contextual) | **0.31** | **0.81** | **0.462** |
+| sparse | 0.12 | 0.47 | 0.218 |
+| hybrid RRF | 0.31 | 0.59 | 0.416 |
+| sparse_en (n=21) | 0.19 | 0.52 | 0.332 |
+
+Paired RRF vs. dense: 7 besser / **12 schlechter** / 13 gleich.
+
+**Befund — ehrliches Negativ-Ergebnis:** Der Hybrid ist netto eine
+**Verschlechterung**: RRF gewichtet Chunks hoch, die in beiden Listen auftauchen,
+und drückt damit dense-only-Treffer aus den Top-8 (Hit@8 0.81 → 0.59). Der
+sparse_en-Arm zeigt zudem: bge-m3-Sparse ist auf diesen Daten nicht nur
+cross-lingual gehandicapt, sondern generell schwach (0.332 auch monolingual) —
+Contextual-Dense ist schlicht der stärkere Kanal. Konsistent mit Exp 2 (naives
+RRF ohne Netto-Vorteil). **Entscheidung: kein Sparse-Hybrid in der Pipeline;**
+denkbares Follow-up wäre eine dense-dominierte gewichtete Fusion oder
+bge-m3-ColBERT-Multivektoren, Priorität aber niedrig.
+
+Hinweis Reproduktion: Der Sparse-Gewichte-Cache
+(`results/sparse_weights_<group>.jsonl`) ist ein Buchtext-Derivat und bleibt
+gitignored; das Skript baut ihn bei Bedarf neu (~10 min CPU für 581 Chunks).
+
 ## Exp 7 — Small-to-Big (`eval/small_to_big_experiment.py`)
 
 **Idee:** Die Suche bleibt auf den kleinen, präzisen Chunks; erst NACH dem Retrieval
@@ -267,8 +302,8 @@ Zitat-Ausfälle erklären. Fix: `OLLAMA_CONTEXT_LENGTH=16384` (make-Target
    Span-Metrik. Ausbau auf n≥50 und `question_en` für die neuen Items bleibt sinnvoll.
 2. ~~Exp 5 — Contextual Retrieval~~ ✅ gemessen (+0.182 MRR, s. o.) — offen ist die
    **Produktivierung**: `CONTEXTUAL_INGEST_ENABLED`-Flag in der Ingestion-Pipeline + Re-Ingest.
-3. **Exp 6 — Sparse-Hybrid** mit bge-m3-eigenen Sparse-Gewichten statt BM25
-   (adressiert das cross-linguale Handicap aus Exp 2); dabei auch `bm25_en`-Arm.
+3. ~~Exp 6 — Sparse-Hybrid~~ ✅ gemessen (s. o.) — ehrliches Negativ-Ergebnis,
+   kein Sparse-Hybrid in der Pipeline.
 4. Bootstrap-CI / paired Test, sobald n≥30.
 5. ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in via
    `RERANKER_ENABLED`, s. README).
