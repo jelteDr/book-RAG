@@ -5,7 +5,7 @@ FRONTEND_PORT ?= 4200
 BACKEND_PORT  ?= 8001
 
 .DEFAULT_GOAL := help
-.PHONY: help up up-ml down restart clean setup models ollama-host ingest eval logs ps
+.PHONY: help up up-ml down restart clean setup models ollama-host ollama-ctx ingest eval logs ps
 
 help: ## Diese Übersicht anzeigen
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -47,6 +47,10 @@ models: ## Benötigte Ollama-Modelle ziehen (Embeddings + Chat)
 ollama-host: ## Einmalig (macOS): Host-Ollama für Container erreichbar machen
 	launchctl setenv OLLAMA_HOST 0.0.0.0:11434
 	@echo "Gesetzt. Bitte die Ollama-App EINMAL beenden und neu öffnen, dann 'make restart'."
+
+ollama-ctx: ## Einmalig (macOS): Kontextfenster erhöhen — sonst schneidet Ollama RAG-Prompts bei 4096 Token ab
+	launchctl setenv OLLAMA_CONTEXT_LENGTH 16384
+	@echo "Gesetzt. Bitte die Ollama-App EINMAL beenden und neu öffnen (lädt Modelle mit num_ctx=16384)."
 
 # Gruppe für Demo-Ingest + Eval (überschreibbar: make eval GROUP=...)
 GROUP ?= Horror

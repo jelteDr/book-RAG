@@ -67,6 +67,7 @@ Voraussetzungen: Docker, Ollama, [`uv`](https://docs.astral.sh/uv/).
 ```bash
 cd book-RAG
 make ollama-host          # EINMALIG (macOS): OLLAMA_HOST=0.0.0.0 -> danach Ollama-App neu starten
+make ollama-ctx           # EINMALIG: Kontextfenster 16k — sonst schneidet Ollama RAG-Prompts bei 4096 Token ab!
 make models               # EINMALIG: bge-m3 + qwen2.5:7b ziehen
 make up                   # Qdrant + Backend + Frontend starten
 make ingest               # Demo-Buch (Public Domain) ingesten
@@ -146,6 +147,13 @@ generatives RAG-System das aussagekräftigere Qualitätsmaß (misst *Stützung*,
 `RERANK_CANDIDATES` (30) Kandidaten, der Reranker sortiert sie neu und gibt die Top-`TOP_K` ans LLM;
 der Faithfulness-Check markiert Zitate, die die Quelle laut NLI nicht stützt (⚠ im Frontend).
 Beide Modelle laden lazy und laufen im Thread. Status unter `GET /health`.
+
+**Optional: Small-to-Big** (`SMALL_TO_BIG_ENABLED=true`): Die Suche bleibt auf den kleinen,
+präzisen Chunks; die besten `S2B_TOP_N` (3) Treffer werden vor dem Prompt-Bau um ± `S2B_WINDOW` (1)
+Nachbar-Chunks erweitert — per deterministischer Punkt-ID direkt aus Qdrant, Overlap exakt über
+char-Offsets zusammengefügt, kein Re-Embedding. Exp 7: Die antwort-tragende Passage steht damit
+deutlich öfter in Quelle [1] (MRR 0.474 → 0.540, kein Item schlechter), Kosten +36 % Prompt-Länge
+(→ vorher `make ollama-ctx`, sonst schneidet der Runner den Prompt ab).
 
 ## Projektstruktur
 
