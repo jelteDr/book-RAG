@@ -42,3 +42,4 @@ reports/
 # Kontext-Checkpoints sind Buchtext-Derivate — nie committen (Copyright!)
 /results/contextual_contexts.jsonl
 /results/*.log
+/results/sparse_weights_*
