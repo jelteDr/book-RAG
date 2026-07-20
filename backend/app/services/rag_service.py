@@ -20,6 +20,7 @@ from sqlmodel import col, select
 
 from app.db.models import ChatMessage, Collection, CollectionMember, Conversation, Group, QueryLog
 from app.rag.citations import extract_citations, sources_overview
+from app.rag.expander import expand_points
 from app.rag.prompt_builder import build_messages
 from app.rag.retriever import retrieve
 from app.validation import validate_question
@@ -88,6 +89,17 @@ class RagService:
             points = await asyncio.to_thread(self._reranker.rerank, question, points, top_k)
         else:
             points = points[:top_k]
+
+        # Small-to-Big: Top-Treffer um Nachbar-Chunks erweitern (best-effort —
+        # ein fehlgeschlagener Lookup darf die Antwort nicht verhindern).
+        if self._settings.small_to_big_enabled and points:
+            try:
+                points = await expand_points(
+                    points, vectors=self._vectors,
+                    window=self._settings.s2b_window, top_n=self._settings.s2b_top_n,
+                )
+            except Exception:
+                pass
 
         if not points:
             msg = "Dazu finde ich in den Quellen nichts."

@@ -222,6 +222,45 @@ real, aber deutlich kleiner als die Kapitel-Metrik suggerierte** (+0.054 statt
 Exp-5-Effekts war also „landet öfter irgendwo im richtigen Kapitel" — genau die Sorte
 Verzerrung, für deren Aufdeckung das v2-Set gebaut wurde.
 
+## Exp 7 — Small-to-Big (`eval/small_to_big_experiment.py`)
+
+**Idee:** Die Suche bleibt auf den kleinen, präzisen Chunks; erst NACH dem Retrieval
+werden die besten `top_n` Treffer um ihre Nachbar-Chunks (± `window`) erweitert —
+über die deterministischen Punkt-IDs direkt aus Qdrant, die Overlap-Zeichen werden
+per char-Offset exakt zusammengefügt (`app/rag/expander.py`). Kein Re-Embedding.
+Opt-in via `SMALL_TO_BIG_ENABLED` (+ `S2B_WINDOW`, `S2B_TOP_N`).
+
+**Messung:** Small-to-Big ändert nicht, WAS gefunden wird, sondern was das Modell
+davon LIEST. Gemessen wird daher die Span-Abdeckung des Prompt-Kontexts (Gold-Set v2,
+n=32, k=8, Live-Index Horror, paired — beide Arme nutzen dieselben Suchergebnisse):
+
+| Arm | Kontext-Hit@8 | MRR (erster abdeckender Treffer) | Ø Prompt-Kontext |
+|---|---|---|---|
+| plain | 0.81 | 0.474 | 18.433 Zeichen |
+| expanded (window=1, top_n=3) | 0.81 | **0.540** | 25.036 Zeichen (+36 %) |
+| expanded (window=2, top_n=3) | 0.81 | **0.566** | 31.065 Zeichen (+69 %) |
+
+Paired: window=1 → 4 besser / 0 schlechter / 28 gleich; window=2 → 6/0/26.
+**Kein einziges Item verschlechtert sich** — erwartbar, denn Erweiterung kann
+Abdeckung nur hinzufügen; der zweite Dedup-Durchlauf verhindert, dass erweiterte
+Fenster andere Treffer duplizieren. Hit@8 bleibt gleich, weil komplette MISSes
+(Passage nicht in den Top-8-Nachbarschaften) nicht zu retten sind.
+
+**Interpretation:** Die antwort-tragende Passage steht deutlich öfter in Quelle [1]
+(plain 11/32 → window=1 15/32) — das Modell liest die richtige Stelle also früher
+und im Zusammenhang. Kosten: +36 % Prompt (window=1) bzw. +69 % (window=2).
+Empfehlung: window=1/top_n=3 aktivieren, window=2 nur wenn das Kontextfenster-Problem
+(s. u.) behoben ist.
+
+**⚠ Nebenbefund — Ollama schneidet unsere Prompts ab:** Das Server-Log
+(`~/.ollama/logs/server.log`, 2026-07-16) zeigt mehrfach
+`truncating input prompt limit=2050 prompt=4168..6037 keep=4`: Der Runner lief ohne
+`num_ctx`-Konfiguration (Default 4096, zeitweise 2 Slots à ~2048) — bei unseren
+~4,6k-Token-Prompts fehlten dem Modell System-Prompt und die ersten Quellen
+komplett. Das dürfte einen Teil der niedrigen Faithfulness (0.667) und der
+Zitat-Ausfälle erklären. Fix: `OLLAMA_CONTEXT_LENGTH=16384` (make-Target
+`ollama-ctx`), danach Metrik-Suite neu laufen lassen.
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf

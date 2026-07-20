@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     # Retrieval.
     top_k: int = 8
 
+    # Small-to-Big (optional, opt-in): beste Treffer werden vor dem Prompt-Bau um
+    # Nachbar-Chunks erweitert (kein Re-Embedding, ein Qdrant-Lookup pro Treffer).
+    # Prompt-Kosten: jeder erweiterte Treffer wird bis zu (2*window+1)-mal so lang.
+    small_to_big_enabled: bool = False
+    s2b_window: int = 1  # Nachbar-Chunks je Richtung
+    s2b_top_n: int = 3  # nur die besten N Treffer erweitern (Prompt-Budget)
+
     # Contextual Ingestion (optional, opt-in; Exp 5: +0.182 MRR).
     # Beim Ingest generiert das Chat-LLM pro Chunk 1-2 Sätze Kontext (Pronomen
     # aufgelöst, Ort/Geschehen), die NUR ins Embedding eingehen. Kostet ~4-6 s

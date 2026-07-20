@@ -84,6 +84,21 @@ class VectorStore:
         )
         return result.points
 
+    async def get_by_indices(
+        self, book_id: str, chunk_indices: Sequence[int]
+    ) -> list[models.Record]:
+        """Chunks eines Buchs direkt über ihre deterministischen IDs holen.
+
+        Fehlende Indizes (z. B. vor dem Buchanfang / nach dem Ende) fallen
+        einfach aus dem Ergebnis — kein Fehler.
+        """
+        ids = [
+            str(uuid.uuid5(_ID_NAMESPACE, f"{book_id}:{i}")) for i in chunk_indices
+        ]
+        return await self._client.retrieve(
+            collection_name=self._collection, ids=ids, with_payload=True
+        )
+
     async def scroll_all(
         self, group_id: str | None = None, batch: int = 256
     ) -> list[models.Record]:

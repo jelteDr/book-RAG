@@ -42,6 +42,10 @@ services:
       - FAITHFULNESS_CHECK_ENABLED=${FAITHFULNESS_CHECK_ENABLED:-false}
       # Opt-in Contextual Ingestion (Exp 5): LLM-Kontext je Chunk beim Upload (~4-6 s/Chunk).
       - CONTEXTUAL_INGEST_ENABLED=${CONTEXTUAL_INGEST_ENABLED:-false}
+      # Opt-in Small-to-Big (Exp 7): Top-Treffer um Nachbar-Chunks erweitern (vorher: make ollama-ctx).
+      - SMALL_TO_BIG_ENABLED=${SMALL_TO_BIG_ENABLED:-false}
+      - S2B_WINDOW=${S2B_WINDOW:-1}
+      - S2B_TOP_N=${S2B_TOP_N:-3}
       - DATABASE_URL=postgresql+asyncpg://bookrag:bookrag@postgres:5432/bookrag
     extra_hosts:
       - "host.docker.internal:host-gateway"
