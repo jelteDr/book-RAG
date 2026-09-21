@@ -2,12 +2,30 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
+  ElementRef,
+  HostListener,
   inject,
   OnDestroy,
   signal,
+  viewChild,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import {
+  ArrowUp,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  LucideAngularModule,
+  MessagesSquare,
+  Plus,
+  Trash2,
+  TriangleAlert,
+  X,
+} from 'lucide-angular';
 
 import { ChatService } from '../chat.service';
 import { LibraryService } from '../library.service';
@@ -21,7 +39,8 @@ interface Segment {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, NgTemplateOutlet, LucideAngularModule],
+  host: { class: 'block h-full' },
   templateUrl: './chat.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -42,6 +61,24 @@ export class ChatComponent implements OnDestroy {
   readonly draft = signal('');
   readonly streaming = signal(false);
   readonly expanded = signal<Source | null>(null);
+
+  readonly icons = {
+    ArrowUp,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    ChevronsUpDown,
+    MessagesSquare,
+    Plus,
+    Trash2,
+    TriangleAlert,
+    X,
+  };
+
+  /** Unter lg liegt die Chat-Liste in einem Slide-over. */
+  readonly chatListOpen = signal(false);
+  /** Löschen fragt einmal in der Zeile nach (kein confirm()). */
+  readonly confirmDeleteId = signal<number | null>(null);
 
   /** Wechselnde Status-Sprüche, solange das Modell „denkt" (vor dem ersten Token). */
   private readonly thinkingWords = [
@@ -86,8 +123,18 @@ export class ChatComponent implements OnDestroy {
     return [...buckets.values()];
   });
 
+  private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
+
   constructor() {
     void this.load();
+    // Neue Nachrichten und gestreamte Tokens im Blick behalten: nach dem Rendern ans Ende scrollen.
+    effect(() => {
+      this.messages();
+      this.draft();
+      this.streaming();
+      const el = this.scroller()?.nativeElement;
+      if (el) setTimeout(() => (el.scrollTop = el.scrollHeight));
+    });
   }
 
   private async load(): Promise<void> {
@@ -132,6 +179,7 @@ export class ChatComponent implements OnDestroy {
   }
 
   newChat(): void {
+    this.chatListOpen.set(false);
     this.currentConversationId.set(null);
     this.messages.set([]);
     this.expanded.set(null);
@@ -197,6 +245,15 @@ export class ChatComponent implements OnDestroy {
     return this.collapsedGroups().has(key);
   }
 
+  /** Esc schließt Menüs, Slide-over und eine offene Lösch-Nachfrage. */
+  @HostListener('document:keydown.escape')
+  closeOverlays(): void {
+    this.modelMenuOpen.set(false);
+    this.groupMenuOpen.set(false);
+    this.chatListOpen.set(false);
+    this.confirmDeleteId.set(null);
+  }
+
   private startThinking(): void {
     this.thinkingIndex.set(0);
     this.stopThinking();
@@ -226,8 +283,8 @@ export class ChatComponent implements OnDestroy {
     this.stopThinking();
   }
 
-  async deleteConversation(conv: Conversation, event: Event): Promise<void> {
-    event.stopPropagation(); // nicht gleichzeitig laden
+  async deleteConversation(conv: Conversation): Promise<void> {
+    this.confirmDeleteId.set(null);
     await this.chat.deleteConversation(conv.id);
     if (this.currentConversationId() === conv.id) this.newChat();
     await this.refreshConversations();
@@ -237,6 +294,7 @@ export class ChatComponent implements OnDestroy {
     try {
       const conv = await this.chat.getConversation(id);
       this.currentConversationId.set(id);
+      this.chatListOpen.set(false);
       this.messages.set(
         conv.messages.map((m) => ({ role: m.role, text: m.content, sources: m.sources })),
       );

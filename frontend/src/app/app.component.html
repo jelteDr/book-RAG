@@ -1,39 +1,87 @@
-<div class="flex flex-col h-screen">
-  <nav class="flex items-center gap-4 px-4 py-3 border-b border-edge">
-    <span class="font-semibold">book-RAG</span>
-    <a
-      routerLink="/chat"
-      routerLinkActive="text-accent"
-      class="text-sm text-muted hover:text-ink"
-      >Chat</a
-    >
-    <a
-      routerLink="/groups"
-      routerLinkActive="text-accent"
-      class="text-sm text-muted hover:text-ink"
-      >Dokumente</a
-    >
-    <a
-      routerLink="/models"
-      routerLinkActive="text-accent"
-      class="text-sm text-muted hover:text-ink"
-      >Modelle</a
-    >
-    <a
-      routerLink="/dashboard"
-      routerLinkActive="text-accent"
-      class="text-sm text-muted hover:text-ink"
-      >Dashboard</a
-    >
+<div class="min-h-dvh">
+  <!-- Desktop: feste Sidebar -->
+  <aside
+    class="fixed inset-y-0 left-0 z-20 hidden border-r border-line-soft transition-[width] duration-200 lg:block"
+    [class]="collapsed() ? 'w-16' : 'w-60'"
+  >
+    <app-sidebar [collapsed]="collapsed()" />
     <button
-      class="ml-auto text-sm text-muted hover:text-ink border border-edge rounded-md px-2 py-1"
-      (click)="theme.toggle()"
-      [title]="theme.theme() === 'dark' ? 'Zu Light-Mode wechseln' : 'Zu Dark-Mode wechseln'"
+      type="button"
+      [attr.aria-label]="collapsed() ? 'Seitenleiste ausklappen' : 'Seitenleiste einklappen'"
+      [title]="collapsed() ? 'Seitenleiste ausklappen' : 'Seitenleiste einklappen'"
+      [attr.aria-expanded]="!collapsed()"
+      class="absolute -right-3.5 bottom-5 grid size-7 place-items-center rounded-full bg-surface text-ink-muted shadow-thumb hover:text-ink"
+      (click)="toggleCollapsed()"
     >
-      {{ theme.theme() === 'dark' ? '☀︎ Light' : '☾ Dark' }}
+      <lucide-icon
+        [img]="collapsed() ? icons.PanelLeftOpen : icons.PanelLeftClose"
+        [size]="14"
+        aria-hidden="true"
+      />
     </button>
-  </nav>
-  <main class="flex-1 min-h-0">
-    <router-outlet></router-outlet>
+  </aside>
+
+  <!-- Kopfzeile: unter lg mit Hamburger + Seitentitel, immer mit Hell/Dunkel-Wechsel rechts -->
+  <header
+    [attr.inert]="drawerOpen() ? '' : null"
+    class="sticky top-0 z-10 flex h-14 items-center gap-1 border-b border-line-soft bg-bar px-2 backdrop-blur-xl transition-[padding] duration-200 lg:border-b-0 lg:bg-transparent lg:px-6 lg:backdrop-blur-none"
+    [class]="collapsed() ? 'lg:pl-[5.5rem]' : 'lg:pl-[16.5rem]'"
+  >
+    <button
+      #menuButton
+      type="button"
+      aria-label="Menü öffnen"
+      [attr.aria-expanded]="drawerOpen()"
+      aria-controls="app-drawer"
+      class="icon-btn !text-accent lg:hidden"
+      (click)="drawerOpen.set(true)"
+    >
+      <lucide-icon [img]="icons.Menu" [size]="24" aria-hidden="true" />
+    </button>
+    <span class="text-[17px] font-semibold lg:hidden">{{ pageTitle() }}</span>
+    <button
+      type="button"
+      class="icon-btn ml-auto"
+      [attr.aria-label]="theme.dark() ? 'Zum hellen Design wechseln' : 'Zum dunklen Design wechseln'"
+      [title]="theme.dark() ? 'Helles Design' : 'Dunkles Design'"
+      (click)="theme.toggle()"
+    >
+      <lucide-icon [img]="theme.dark() ? icons.Sun : icons.Moon" [size]="20" aria-hidden="true" />
+    </button>
+  </header>
+
+  @if (drawerOpen()) {
+    <div class="fixed inset-0 z-30 lg:hidden">
+      <div class="absolute inset-0 animate-fade bg-overlay" (click)="closeDrawer()"></div>
+      <div
+        id="app-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menü"
+        class="absolute inset-y-0 left-0 w-[min(18rem,85vw)] animate-drawer overflow-hidden rounded-r-2xl shadow-pop"
+      >
+        <app-sidebar (navigate)="closeDrawer()" />
+        <button
+          #closeButton
+          type="button"
+          aria-label="Menü schließen"
+          class="icon-btn absolute right-2 top-2.5"
+          (click)="closeDrawer()"
+        >
+          <lucide-icon [img]="icons.X" [size]="20" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  }
+
+  <main
+    [attr.inert]="drawerOpen() ? '' : null"
+    class="transition-[padding] duration-200"
+    [class]="collapsed() ? 'lg:pl-16' : 'lg:pl-60'"
+  >
+    <!-- 'full': Seite füllt die Resthöhe unter der Kopfzeile und scrollt selbst (Chat) -->
+    <div [class]="contentClass()">
+      <router-outlet />
+    </div>
   </main>
 </div>

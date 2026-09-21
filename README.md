@@ -32,6 +32,7 @@ Angular (minimal, Signals) ──REST + SSE──► FastAPI (Python 3.12)
 - **PostgreSQL** — Gruppen/Bücher, Modell-Registry, gespeicherte Unterhaltungen, Anfrage-Log
 - **Angular** — schlanke SPA (Standalone-Components, Signals, `@if/@for`), nginx-`/api`-Proxy für SSE;
   Views: Chat, Dokumente (Upload/Gruppen), Modelle (Metadaten), Dashboard (Live-Telemetrie)
+  — Apple-nahes Designsystem auf Tailwind-Tokens (hell/dunkel, responsiv; siehe [`frontend/DESIGN.md`](frontend/DESIGN.md))
 - **Notebooks/Skripte** — die komplette Evaluations-Suite (`eval/`, `notebooks/`)
 
 ## Features
@@ -159,7 +160,7 @@ deutlich öfter in Quelle [1] (MRR 0.474 → 0.540, kein Item schlechter), Koste
 
 ```
 backend/    FastAPI (routes/ · services/ · rag/ · ingestion/ · clients/ · db/)
-frontend/   Angular (chat/ · groups/ · models/ · dashboard/ · services), nginx-Proxy
+frontend/   Angular (chat/ · groups/ · models/ · dashboard/ · shell/ · ui/ · services), nginx-Proxy
 eval/       Gold-Set + Experimente (retrieval/lang/hybrid/reranker/answer) + RESULTS.md
 notebooks/  DS-Notebooks (Gold-Set v2: Span-Labels, PCA-Karte, Wortwolken)
 results/    Charts & Roh-Ergebnisse

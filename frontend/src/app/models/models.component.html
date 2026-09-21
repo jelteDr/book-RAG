@@ -1,65 +1,73 @@
-<div class="max-w-5xl mx-auto w-full px-4 py-6 flex flex-col gap-4 overflow-y-auto h-full">
-  <div class="flex items-center justify-between">
-    <h2 class="text-lg font-semibold">Modelle & Metriken</h2>
-    <button
-      class="bg-panel2 border border-edge rounded-lg px-3 py-1 text-sm disabled:opacity-50"
-      (click)="sync()"
-      [disabled]="busy()"
-    >
-      {{ busy() ? 'Sync…' : 'Mit Ollama synchronisieren' }}
-    </button>
-  </div>
+<ui-page-header title="Modelle">
+  <button actions type="button" class="btn btn-secondary" (click)="sync()" [disabled]="busy()">
+    <lucide-icon
+      [img]="busy() ? icons.LoaderCircle : icons.RefreshCw"
+      [size]="16"
+      aria-hidden="true"
+      [class.animate-spin]="busy()"
+    />
+    Mit Ollama abgleichen
+  </button>
+</ui-page-header>
 
-  @if (error()) {
-    <div class="text-red-400 text-sm">{{ error() }}</div>
-  }
+@if (error()) {
+  <ui-banner tone="danger">{{ error() }} Prüfe, ob das Backend läuft, und lade die Seite neu.</ui-banner>
+}
 
-  <div class="overflow-x-auto border border-edge rounded-xl">
-    <table class="w-full text-sm">
-      <thead class="bg-panel2 text-muted text-left">
+<ui-section title="Modelle und Metriken" padded="false">
+  <div class="-mx-4 overflow-x-auto px-4">
+    <table class="w-full min-w-[46rem] text-sm">
+      <thead class="text-left text-[13px] text-ink-muted">
         <tr>
-          <th class="px-3 py-2">Modell</th>
-          <th class="px-3 py-2">Parameter</th>
-          <th class="px-3 py-2">Quant.</th>
-          <th class="px-3 py-2">Kontext</th>
-          <th class="px-3 py-2">Cutoff</th>
-          <th class="px-3 py-2">Anfragen</th>
-          <th class="px-3 py-2">Ø TTFT</th>
-          <th class="px-3 py-2">Ø TPS</th>
+          <th class="py-3 pr-3 font-medium">Modell</th>
+          <th class="px-3 py-3 font-medium">Parameter</th>
+          <th class="px-3 py-3 font-medium">Quant.</th>
+          <th class="px-3 py-3 text-right font-medium">Kontext</th>
+          <th class="px-3 py-3 font-medium">Cutoff</th>
+          <th class="px-3 py-3 text-right font-medium">Anfragen</th>
+          <th class="px-3 py-3 text-right font-medium">Ø TTFT (ms)</th>
+          <th class="py-3 pl-3 text-right font-medium">Ø TPS</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="divide-y divide-line border-t border-line">
         @for (row of rows(); track row.info.name) {
-          <tr class="border-t border-edge">
-            <td class="px-3 py-2 font-medium">{{ row.info.name }}</td>
+          <tr>
+            <td class="py-2 pr-3 font-medium">{{ row.info.name }}</td>
             <td class="px-3 py-2">{{ row.info.parameter_size || '—' }}</td>
             <td class="px-3 py-2">{{ row.info.quantization || '—' }}</td>
-            <td class="px-3 py-2">{{ row.info.context_length || '—' }}</td>
+            <td class="px-3 py-2 text-right">{{ row.info.context_length || '—' }}</td>
             <td class="px-3 py-2">
               <div class="flex items-center gap-1">
                 <input
                   type="date"
-                  class="bg-panel2 text-ink border border-edge rounded px-1.5 py-0.5 text-xs"
+                  class="control !h-9 !w-auto !px-2 text-sm"
+                  [attr.aria-label]="'Cutoff-Datum für ' + row.info.name"
                   [ngModel]="cutoffDraft()[row.info.name]"
                   (ngModelChange)="setCutoff(row.info.name, $event)"
                 />
-                <button class="text-accent text-xs hover:underline" (click)="saveCutoff(row.info.name)">
-                  ✓
+                <button
+                  type="button"
+                  class="icon-btn !text-accent"
+                  [attr.aria-label]="'Cutoff speichern für ' + row.info.name"
+                  title="Cutoff speichern"
+                  (click)="saveCutoff(row.info.name)"
+                >
+                  <lucide-icon [img]="icons.Check" [size]="18" aria-hidden="true" />
                 </button>
               </div>
             </td>
-            <td class="px-3 py-2">{{ row.metric?.queries ?? 0 }}</td>
-            <td class="px-3 py-2">{{ row.metric?.avg_ttft_ms ?? '—' }}</td>
-            <td class="px-3 py-2">{{ row.metric?.avg_tps ?? '—' }}</td>
+            <td class="px-3 py-2 text-right">{{ row.metric?.queries ?? 0 }}</td>
+            <td class="px-3 py-2 text-right">{{ row.metric?.avg_ttft_ms ?? '—' }}</td>
+            <td class="py-2 pl-3 text-right">{{ row.metric?.avg_tps ?? '—' }}</td>
           </tr>
         } @empty {
           <tr>
-            <td class="px-3 py-4 text-muted" colspan="8">
-              Keine Modelle — „Mit Ollama synchronisieren" klicken.
+            <td class="py-6 text-ink-muted" colspan="8">
+              {{ loading() ? 'Lädt …' : 'Noch keine Modelle. Gleiche oben mit Ollama ab.' }}
             </td>
           </tr>
         }
       </tbody>
     </table>
   </div>
-</div>
+</ui-section>

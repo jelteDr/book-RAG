@@ -1,276 +1,339 @@
-<div class="flex h-full">
-  <!-- Sidebar: Chats, nach Gruppe gebündelt -->
-  <aside class="w-56 shrink-0 border-r border-edge flex flex-col">
-    <div class="flex items-center justify-between px-3 py-2 border-b border-edge">
-      <span class="font-semibold text-sm">Chats</span>
-      <button
-        class="text-lg leading-none text-accent hover:opacity-80"
-        (click)="newChat()"
-        title="Neuer Chat"
-      >
-        ＋
-      </button>
-    </div>
-    <div class="flex-1 overflow-y-auto p-2 flex flex-col gap-3">
-      @for (grp of groupedConversations(); track grp.key) {
-        <div>
-          <div
-            class="flex items-center justify-between px-1 mb-1 cursor-pointer select-none"
+<!-- Chat-Liste, nach Gruppe gebündelt: ab lg als Spalte, darunter im Slide-over -->
+<ng-template #chatList>
+  <div class="flex h-14 shrink-0 items-center justify-between pl-5 pr-2">
+    <h2 class="text-[17px] font-semibold">Chats</h2>
+    <button type="button" class="icon-btn !text-accent" aria-label="Neuer Chat" title="Neuer Chat" (click)="newChat()">
+      <lucide-icon [img]="icons.Plus" [size]="20" aria-hidden="true" />
+    </button>
+  </div>
+  <div class="flex flex-1 flex-col gap-4 overflow-y-auto px-3 pb-4">
+    @for (grp of groupedConversations(); track grp.key) {
+      <section class="min-w-0">
+        <div class="flex items-center justify-between gap-1">
+          <button
+            type="button"
+            class="flex h-9 min-w-0 flex-1 items-center gap-1 rounded-[10px] px-2 text-left text-[13px] font-medium uppercase tracking-wide text-ink-muted hover:text-ink"
+            [attr.aria-expanded]="!isCollapsed(grp.key)"
             (click)="toggleGroup(grp.key)"
-            [title]="isCollapsed(grp.key) ? 'Ausklappen' : 'Einklappen'"
           >
-            <span class="flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted truncate">
-              <span class="text-[9px] w-2 shrink-0">{{ isCollapsed(grp.key) ? '▸' : '▾' }}</span>
-              {{ grp.label }}
-              @if (isCollapsed(grp.key)) {
-                <span class="normal-case tracking-normal">({{ grp.items.length }})</span>
-              }
-            </span>
-            @if (grp.key) {
-              <button
-                class="text-accent hover:opacity-80 text-base leading-none px-1 shrink-0"
-                (click)="newChatInGroup(grp.key); $event.stopPropagation()"
-                title="Neuer Chat in dieser Gruppe"
-              >
-                ＋
-              </button>
+            <lucide-icon
+              [img]="isCollapsed(grp.key) ? icons.ChevronRight : icons.ChevronDown"
+              [size]="14"
+              aria-hidden="true"
+              class="shrink-0"
+            />
+            <span class="truncate">{{ grp.label }}</span>
+            @if (isCollapsed(grp.key)) {
+              <span class="shrink-0 normal-case tracking-normal">({{ grp.items.length }})</span>
             }
-          </div>
-          @if (!isCollapsed(grp.key)) {
-            @for (c of grp.items; track c.id) {
-              <div
-                class="flex items-center justify-between gap-1 rounded-md px-2 py-1 cursor-pointer hover:bg-panel2"
-                [class.bg-panel2]="currentConversationId() === c.id"
-                (click)="loadConversation(c.id)"
-              >
-                <span class="text-sm truncate">{{ c.title }}</span>
-                <button
-                  class="text-muted hover:text-red-400 text-sm leading-none px-1"
-                  (click)="deleteConversation(c, $event)"
-                  title="Chat löschen"
-                >
-                  −
-                </button>
-              </div>
-            }
+          </button>
+          @if (grp.key) {
+            <button
+              type="button"
+              class="icon-btn !size-9"
+              [attr.aria-label]="'Neuer Chat in ' + grp.label"
+              title="Neuer Chat in dieser Gruppe"
+              (click)="newChatInGroup(grp.key)"
+            >
+              <lucide-icon [img]="icons.Plus" [size]="16" aria-hidden="true" />
+            </button>
           }
         </div>
-      } @empty {
-        <div class="text-xs text-muted px-1">Noch keine Chats — ＋ für neuen Chat.</div>
-      }
-    </div>
+        @if (!isCollapsed(grp.key)) {
+          <ul>
+            @for (c of grp.items; track c.id) {
+              <li
+                class="flex min-h-11 items-center gap-1 rounded-[10px] pl-3 pr-1 hover:bg-surface-muted"
+                [class.bg-surface-muted]="currentConversationId() === c.id"
+              >
+                @if (confirmDeleteId() === c.id) {
+                  <span class="min-w-0 flex-1 truncate text-sm text-ink-muted">Löschen?</span>
+                  <button type="button" class="btn btn-sm btn-danger !px-2.5" (click)="deleteConversation(c)">
+                    Löschen
+                  </button>
+                  <button type="button" class="btn btn-sm btn-ghost !px-2.5" (click)="confirmDeleteId.set(null)">
+                    Nein
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="h-11 min-w-0 flex-1 truncate text-left text-[15px]"
+                    [attr.aria-current]="currentConversationId() === c.id ? 'true' : null"
+                    (click)="loadConversation(c.id)"
+                  >
+                    {{ c.title }}
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn !size-9 hover:!text-danger"
+                    [attr.aria-label]="'Chat löschen: ' + c.title"
+                    title="Chat löschen"
+                    (click)="confirmDeleteId.set(c.id)"
+                  >
+                    <lucide-icon [img]="icons.Trash2" [size]="16" aria-hidden="true" />
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    } @empty {
+      <p class="px-2 text-sm text-ink-muted">Noch keine Chats. Stell unten deine erste Frage.</p>
+    }
+  </div>
+</ng-template>
+
+<div class="flex h-full">
+  <aside class="hidden w-64 shrink-0 flex-col border-r border-line-soft lg:flex">
+    <ng-container *ngTemplateOutlet="chatList" />
   </aside>
 
-  <!-- Hauptbereich -->
-  <div class="flex-1 flex flex-col min-w-0">
-    <div class="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-      @for (msg of messages(); track $index) {
-        <div class="flex" [class.justify-end]="msg.role === 'user'">
-          <div
-            class="rounded-xl px-4 py-2.5 max-w-[90%] leading-relaxed whitespace-pre-wrap border border-edge"
-            [class.bg-userbubble]="msg.role === 'user'"
-            [class.bg-panel]="msg.role !== 'user'"
-          >
-            @if (msg.role === 'assistant') {
-              @for (seg of segments(msg.text); track $index) {
-                @if (seg.marker !== null) {
-                  <a
-                    class="text-accent font-semibold cursor-pointer hover:underline"
-                    (click)="onCite(msg, seg.marker)"
-                    >{{ seg.text }}</a
-                  >
-                } @else {
-                  <span>{{ seg.text }}</span>
-                }
-              }
-              @if (msg.error) {
-                <span class="text-red-400">{{ msg.error }}</span>
-              }
+  @if (chatListOpen()) {
+    <div class="fixed inset-0 z-30 lg:hidden">
+      <div class="absolute inset-0 animate-fade bg-overlay" (click)="chatListOpen.set(false)"></div>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Chats"
+        class="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] animate-drawer flex-col overflow-hidden rounded-r-2xl bg-canvas shadow-pop"
+      >
+        <ng-container *ngTemplateOutlet="chatList" />
+        <button
+          type="button"
+          class="btn btn-secondary m-3 shrink-0"
+          (click)="chatListOpen.set(false)"
+        >
+          Schließen
+        </button>
+      </div>
+    </div>
+  }
 
-              @if (msg.sources?.length) {
-                <div class="mt-2.5 flex flex-wrap gap-1.5 items-center">
-                  <span class="text-xs text-muted">Quellen:</span>
-                  @for (s of msg.sources; track s.marker) {
+  <!-- Hauptbereich -->
+  <div class="flex min-w-0 flex-1 flex-col">
+    <div class="flex shrink-0 items-center justify-between gap-2 px-3 pt-2 lg:hidden">
+      <button type="button" class="btn btn-sm btn-secondary" (click)="chatListOpen.set(true)">
+        <lucide-icon [img]="icons.MessagesSquare" [size]="16" aria-hidden="true" />
+        Chats
+      </button>
+      <button type="button" class="btn btn-sm btn-ghost" (click)="newChat()">
+        <lucide-icon [img]="icons.Plus" [size]="16" aria-hidden="true" />
+        Neuer Chat
+      </button>
+    </div>
+
+    <div #scroller class="min-h-0 flex-1 overflow-y-auto">
+      <div class="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-4 sm:px-6">
+        @if (!messages().length && !streaming()) {
+          <div class="px-2 py-16 text-center">
+            <h1 class="text-[28px] font-bold leading-tight tracking-tight sm:text-[34px]">Frag dein Buch</h1>
+            <p class="mt-2 text-sm text-ink-muted">
+              Antworten kommen mit Zitaten [1], die du anklicken kannst. Quelle: {{ selectedGroupLabel() }}.
+            </p>
+          </div>
+        }
+        @for (msg of messages(); track $index) {
+          <div class="flex" [class.justify-end]="msg.role === 'user'">
+            <div
+              class="min-w-0 max-w-[90%] whitespace-pre-wrap break-words rounded-[18px] px-4 py-2.5 leading-relaxed"
+              [class]="msg.role === 'user' ? 'bg-accent text-accent-fg' : 'bg-surface'"
+            >
+              @if (msg.role === 'assistant') {
+                @for (seg of segments(msg.text); track $index) {
+                  @if (seg.marker !== null) {
                     <button
-                      class="rounded-full border px-2.5 py-0.5 text-xs bg-panel2"
-                      [class.border-accent]="expanded() === s && s.supported !== false"
-                      [class.text-accent]="expanded() === s && s.supported !== false"
-                      [class.border-amber-500]="s.supported === false"
-                      [class.text-amber-400]="s.supported === false"
-                      [class.border-edge]="expanded() !== s && s.supported !== false"
-                      [title]="s.supported === false ? 'Laut NLI nicht klar durch diese Quelle gestützt' : ''"
-                      (click)="toggleSource(s)"
+                      type="button"
+                      class="font-semibold text-accent hover:underline"
+                      (click)="onCite(msg, seg.marker)"
+                      >{{ seg.text }}</button
                     >
-                      [{{ s.marker }}] {{ s.chapter }} · {{ s.score }}{{ s.supported === false ? ' ⚠' : '' }}
-                    </button>
+                  } @else {
+                    <span>{{ seg.text }}</span>
                   }
-                </div>
-              }
-              @if (expanded(); as ex) {
-                @if (msg.sources?.includes(ex)) {
-                  <div class="mt-2 bg-panel2 border-l-2 border-accent rounded-md px-3 py-2 text-[13px]">
-                    <strong>[{{ ex.marker }}] {{ ex.book_title }} — {{ ex.chapter }}</strong>
-                    @if (ex.text) {
-                      <p class="mt-1.5 text-muted max-h-44 overflow-y-auto">{{ ex.text }}</p>
-                    } @else {
-                      <p class="mt-1.5 text-muted italic">
-                        Textpassage wurde bei diesem älteren Chat nicht gespeichert — neue
-                        Antworten speichern sie mit.
-                      </p>
+                }
+                @if (msg.error) {
+                  <span class="text-danger">{{ msg.error }}</span>
+                }
+
+                @if (msg.sources?.length) {
+                  <div class="mt-3 flex flex-wrap items-center gap-1.5">
+                    <span class="text-xs text-ink-muted">Quellen</span>
+                    @for (s of msg.sources; track s.marker) {
+                      <button
+                        type="button"
+                        class="inline-flex h-8 max-w-full items-center gap-1 rounded-full px-3 text-xs font-medium"
+                        [class]="
+                          s.supported === false
+                            ? 'bg-warn-soft text-warn'
+                            : expanded() === s
+                              ? 'bg-accent-soft text-accent'
+                              : 'bg-surface-muted text-ink'
+                        "
+                        [attr.aria-pressed]="expanded() === s"
+                        [title]="s.supported === false ? 'Laut NLI nicht klar durch diese Quelle gestützt' : ''"
+                        (click)="toggleSource(s)"
+                      >
+                        @if (s.supported === false) {
+                          <lucide-icon [img]="icons.TriangleAlert" [size]="12" aria-label="Nicht gestützt" class="shrink-0" />
+                        }
+                        <span class="truncate">[{{ s.marker }}] {{ s.chapter }} · {{ s.score }}</span>
+                      </button>
                     }
                   </div>
                 }
-              }
-              @if (msg.meta) {
-                <div class="mt-2 text-[11px] text-muted tabular-nums">
-                  {{ msg.meta.model }} · TTFT {{ fmtSecs(msg.meta.ttft_ms) }} · gesamt
-                  {{ fmtSecs(msg.meta.e2e_ms) }} · {{ msg.meta.tps }} tok/s
-                </div>
-              }
-            } @else {
-              {{ msg.text }}
-            }
-          </div>
-        </div>
-      }
-      @if (streaming()) {
-        <div class="flex">
-          <div
-            class="rounded-xl px-4 py-2.5 max-w-[90%] leading-relaxed whitespace-pre-wrap border border-edge bg-panel"
-          >
-            @if (draft()) {
-              {{ draft() }}<span class="opacity-50">▊</span>
-              <div class="mt-1.5 text-[11px] text-muted tabular-nums">⏱ {{ elapsedSeconds() }} s</div>
-            } @else {
-              <span class="inline-flex items-center gap-2 text-muted italic">
-                <span class="flex gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-muted animate-bounce [animation-delay:-0.3s]"></span>
-                  <span class="w-1.5 h-1.5 rounded-full bg-muted animate-bounce [animation-delay:-0.15s]"></span>
-                  <span class="w-1.5 h-1.5 rounded-full bg-muted animate-bounce"></span>
-                </span>
-                {{ thinkingWord() }}…
-                <span class="not-italic text-[11px] tabular-nums">· {{ elapsedSeconds() }} s</span>
-              </span>
-            }
-          </div>
-        </div>
-      }
-    </div>
-
-    <!-- Eingabe + Modell/Gruppe darunter -->
-    <div class="border-t border-edge px-4 py-3 flex flex-col gap-2">
-      <div class="flex gap-2">
-        <textarea
-          class="flex-1 resize-none bg-panel2 text-ink border border-edge rounded-lg p-2"
-          [ngModel]="question()"
-          (ngModelChange)="question.set($event)"
-          (keydown.enter)="onEnter($event)"
-          placeholder="Frage zum Buch stellen…"
-          rows="2"
-        ></textarea>
-        <button
-          class="bg-accent text-onaccent font-semibold rounded-lg px-4 disabled:opacity-50"
-          (click)="send()"
-          [disabled]="streaming() || !question().trim()"
-        >
-          Senden
-        </button>
-      </div>
-      <div class="flex flex-wrap gap-4 text-xs text-muted items-center">
-        <!-- Modell-Auswahl im Claude-Code-Stil: nur der Name, Klick öffnet das Menü -->
-        <div class="relative">
-          <button
-            class="flex items-center gap-1 hover:text-ink"
-            (click)="toggleModelMenu()"
-            title="Modell wechseln"
-          >
-            <span>{{ selectedModel() || 'Modell wählen' }}</span>
-            <span class="text-[8px]">{{ modelMenuOpen() ? '▾' : '▴' }}</span>
-          </button>
-          @if (modelMenuOpen()) {
-            <!-- Unsichtbarer Backdrop: Klick daneben schließt das Menü -->
-            <div class="fixed inset-0 z-10" (click)="modelMenuOpen.set(false)"></div>
-            <div
-              class="absolute bottom-full left-0 mb-2 z-20 min-w-56 bg-panel border border-edge rounded-lg shadow-lg py-1"
-            >
-              @for (m of models(); track m) {
-                <button
-                  class="w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center justify-between gap-3"
-                  [class.text-accent]="m === selectedModel()"
-                  [class.text-ink]="m !== selectedModel()"
-                  (click)="selectModel(m)"
-                >
-                  <span class="truncate">{{ m }}</span>
-                  @if (m === selectedModel()) {
-                    <span class="shrink-0">✓</span>
+                @if (expanded(); as ex) {
+                  @if (msg.sources?.includes(ex)) {
+                    <div class="mt-2 animate-rise rounded-xl bg-surface-muted px-3.5 py-2.5 text-[13px]">
+                      <strong>[{{ ex.marker }}] {{ ex.book_title }} — {{ ex.chapter }}</strong>
+                      @if (ex.text) {
+                        <p class="mt-1.5 max-h-44 overflow-y-auto text-ink-muted">{{ ex.text }}</p>
+                      } @else {
+                        <p class="mt-1.5 text-ink-muted">
+                          Die Textpassage wurde bei diesem älteren Chat nicht gespeichert. Neue Antworten
+                          speichern sie mit.
+                        </p>
+                      }
+                    </div>
                   }
-                </button>
-              } @empty {
-                <div class="px-3 py-1.5 text-sm text-muted">Keine Modelle verfügbar</div>
+                }
+                @if (msg.meta) {
+                  <div class="mt-2 whitespace-normal text-[11px] text-ink-muted">
+                    {{ msg.meta.model }} · TTFT {{ fmtSecs(msg.meta.ttft_ms) }} · gesamt
+                    {{ fmtSecs(msg.meta.e2e_ms) }} · {{ msg.meta.tps }} tok/s
+                  </div>
+                }
+              } @else {<span>{{ msg.text }}</span>}
+            </div>
+          </div>
+        }
+        @if (streaming()) {
+          <div class="flex" aria-live="polite">
+            <div class="min-w-0 max-w-[90%] whitespace-pre-wrap break-words rounded-[18px] bg-surface px-4 py-2.5 leading-relaxed">
+              @if (draft()) {
+                {{ draft() }}<span class="opacity-50">▊</span>
+                <div class="mt-1.5 text-[11px] text-ink-muted">{{ elapsedSeconds() }} s</div>
+              } @else {
+                <span class="inline-flex flex-wrap items-center gap-2 text-ink-muted">
+                  <span class="flex gap-1" aria-hidden="true">
+                    <span class="size-1.5 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.3s]"></span>
+                    <span class="size-1.5 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.15s]"></span>
+                    <span class="size-1.5 animate-bounce rounded-full bg-ink-muted"></span>
+                  </span>
+                  {{ thinkingWord() }} …
+                  <span class="text-[11px]">· {{ elapsedSeconds() }} s</span>
+                </span>
               }
             </div>
-          }
-        </div>
-        <!-- Gruppen-Auswahl im selben Stil wie das Modell -->
-        <div class="relative">
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Eingabe als durchscheinende Leiste; Modell/Gruppe darunter -->
+    <!-- Der Blur liegt auf einer eigenen Ebene: backdrop-filter am Container würde die
+         fixed-Backdrops der Menüs auf die Leiste begrenzen. -->
+    <div class="relative isolate shrink-0 border-t border-line-soft">
+      <div class="absolute inset-0 -z-10 bg-bar backdrop-blur-xl"></div>
+      <div class="mx-auto flex w-full max-w-3xl flex-col gap-1.5 px-4 pb-3 pt-3 sm:px-6">
+        <div class="flex items-end gap-2">
+          <label class="sr-only" for="chat-question">Frage</label>
+          <textarea
+            id="chat-question"
+            class="control !h-auto min-h-11 flex-1 resize-none !rounded-[22px] !px-4 py-2.5"
+            [ngModel]="question()"
+            (ngModelChange)="question.set($event)"
+            (keydown.enter)="onEnter($event)"
+            placeholder="Frage zum Buch stellen …"
+            rows="2"
+          ></textarea>
           <button
-            class="flex items-center gap-1 hover:text-ink"
-            (click)="toggleGroupMenu()"
-            title="Gruppe wechseln"
+            type="button"
+            class="btn btn-primary !size-11 shrink-0 !rounded-full !px-0"
+            aria-label="Senden"
+            title="Senden"
+            (click)="send()"
+            [disabled]="streaming() || !question().trim()"
           >
-            <span>{{ selectedGroupLabel() }}</span>
-            <span class="text-[8px]">{{ groupMenuOpen() ? '▾' : '▴' }}</span>
+            <lucide-icon [img]="icons.ArrowUp" [size]="20" [strokeWidth]="2.5" aria-hidden="true" />
           </button>
-          @if (groupMenuOpen()) {
-            <!-- Unsichtbarer Backdrop: Klick daneben schließt das Menü -->
-            <div class="fixed inset-0 z-10" (click)="groupMenuOpen.set(false)"></div>
-            <div
-              class="absolute bottom-full left-0 mb-2 z-20 min-w-56 bg-panel border border-edge rounded-lg shadow-lg py-1"
+        </div>
+        <!-- relative am Zeilen-Container: beide Menüs öffnen linksbündig und ragen auf dem Handy nicht rechts hinaus -->
+        <div class="relative flex items-center gap-x-1">
+          <!-- Modell-Auswahl: nur der Name, Klick öffnet das Menü nach oben -->
+          <div class="min-w-0">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost max-w-full !px-2.5 !font-medium !text-ink-muted hover:!text-ink"
+              aria-haspopup="true"
+              [attr.aria-expanded]="modelMenuOpen()"
+              title="Modell wechseln"
+              (click)="toggleModelMenu()"
             >
-              <button
-                class="w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center justify-between gap-3"
-                [class.text-accent]="!selectedGroup()"
-                [class.text-ink]="!!selectedGroup()"
-                (click)="selectGroup('')"
-              >
-                <span class="truncate">Alle Gruppen</span>
-                @if (!selectedGroup()) {
-                  <span class="shrink-0">✓</span>
+              <span class="truncate">{{ selectedModel() || 'Modell wählen' }}</span>
+              <lucide-icon [img]="icons.ChevronsUpDown" [size]="14" aria-hidden="true" class="shrink-0" />
+            </button>
+            @if (modelMenuOpen()) {
+              <!-- Unsichtbarer Backdrop: Klick daneben schließt das Menü -->
+              <div class="fixed inset-0 z-30" (click)="modelMenuOpen.set(false)"></div>
+              <div class="menu absolute bottom-full left-0 mb-2 max-h-[60vh] overflow-y-auto">
+                @for (m of models(); track m) {
+                  <button type="button" class="menu-item" (click)="selectModel(m)">
+                    <span class="truncate">{{ m }}</span>
+                    @if (m === selectedModel()) {
+                      <lucide-icon [img]="icons.Check" [size]="16" aria-label="ausgewählt" class="shrink-0 text-accent" />
+                    }
+                  </button>
+                } @empty {
+                  <p class="px-3 py-2 text-sm text-ink-muted">Keine Modelle gefunden. Läuft Ollama?</p>
                 }
-              </button>
-              @for (g of groups(); track g.id) {
-                <button
-                  class="w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center justify-between gap-3"
-                  [class.text-accent]="g.slug === selectedGroup()"
-                  [class.text-ink]="g.slug !== selectedGroup()"
-                  (click)="selectGroup(g.slug)"
-                >
-                  <span class="truncate">{{ g.name }}</span>
-                  @if (g.slug === selectedGroup()) {
-                    <span class="shrink-0">✓</span>
+              </div>
+            }
+          </div>
+          <!-- Gruppen-Auswahl im selben Stil -->
+          <div class="min-w-0">
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost max-w-full !px-2.5 !font-medium !text-ink-muted hover:!text-ink"
+              aria-haspopup="true"
+              [attr.aria-expanded]="groupMenuOpen()"
+              title="Gruppe wechseln"
+              (click)="toggleGroupMenu()"
+            >
+              <span class="truncate">{{ selectedGroupLabel() }}</span>
+              <lucide-icon [img]="icons.ChevronsUpDown" [size]="14" aria-hidden="true" class="shrink-0" />
+            </button>
+            @if (groupMenuOpen()) {
+              <div class="fixed inset-0 z-30" (click)="groupMenuOpen.set(false)"></div>
+              <div class="menu absolute bottom-full left-0 mb-2 max-h-[60vh] overflow-y-auto">
+                <button type="button" class="menu-item" (click)="selectGroup('')">
+                  <span class="truncate">Alle Gruppen</span>
+                  @if (!selectedGroup()) {
+                    <lucide-icon [img]="icons.Check" [size]="16" aria-label="ausgewählt" class="shrink-0 text-accent" />
                   }
                 </button>
-              }
-              @if (collections().length) {
-                <div class="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted border-t border-edge mt-1">
-                  Sammelgruppen
-                </div>
-                @for (c of collections(); track c.id) {
-                  <button
-                    class="w-full text-left px-3 py-1.5 text-sm hover:bg-panel2 flex items-center justify-between gap-3"
-                    [class.text-accent]="c.slug === selectedGroup()"
-                    [class.text-ink]="c.slug !== selectedGroup()"
-                    (click)="selectGroup(c.slug)"
-                  >
-                    <span class="truncate">{{ c.name }}</span>
-                    @if (c.slug === selectedGroup()) {
-                      <span class="shrink-0">✓</span>
+                @for (g of groups(); track g.id) {
+                  <button type="button" class="menu-item" (click)="selectGroup(g.slug)">
+                    <span class="truncate">{{ g.name }}</span>
+                    @if (g.slug === selectedGroup()) {
+                      <lucide-icon [img]="icons.Check" [size]="16" aria-label="ausgewählt" class="shrink-0 text-accent" />
                     }
                   </button>
                 }
-              }
-            </div>
-          }
+                @if (collections().length) {
+                  <p class="menu-title mt-1 border-t border-line">Sammelgruppen</p>
+                  @for (c of collections(); track c.id) {
+                    <button type="button" class="menu-item" (click)="selectGroup(c.slug)">
+                      <span class="truncate">{{ c.name }}</span>
+                      @if (c.slug === selectedGroup()) {
+                        <lucide-icon [img]="icons.Check" [size]="16" aria-label="ausgewählt" class="shrink-0 text-accent" />
+                      }
+                    </button>
+                  }
+                }
+              </div>
+            }
+          </div>
         </div>
       </div>
     </div>

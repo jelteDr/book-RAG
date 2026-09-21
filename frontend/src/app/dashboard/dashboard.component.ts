@@ -2,6 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 
 import { LibraryService } from '../library.service';
 import { MetricsRow, ModelInfo } from '../models';
+import { BannerComponent } from '../ui/banner.component';
+import { EmptyStateComponent } from '../ui/empty-state.component';
+import { PageHeaderComponent } from '../ui/page-header.component';
+import { SectionComponent } from '../ui/section.component';
+import { StatComponent } from '../ui/stat.component';
 
 interface Card {
   info: ModelInfo;
@@ -18,6 +23,8 @@ interface Bar {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
+  imports: [BannerComponent, EmptyStateComponent, PageHeaderComponent, SectionComponent, StatComponent],
+  host: { class: 'stagger block space-y-7' },
   templateUrl: './dashboard.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -27,6 +34,7 @@ export class DashboardComponent {
   readonly infos = signal<ModelInfo[]>([]);
   readonly metrics = signal<Record<string, MetricsRow>>({});
   readonly error = signal('');
+  readonly loading = signal(true);
 
   readonly cards = computed<Card[]>(() =>
     this.infos().map((info) => ({ info, metric: this.metrics()[info.name] })),
@@ -54,6 +62,11 @@ export class DashboardComponent {
     return rows.map((r) => ({ ...r, pct: r.value && max ? (r.value / max) * 100 : 0 }));
   }
 
+  /** Millisekunden als Sekunden mit Dezimalkomma (9358 -> "9,4"); große ms-Zahlen sprengen schmale Spalten. */
+  secs(ms: number | null | undefined): string {
+    return ms == null ? '—' : (ms / 1000).toFixed(1).replace('.', ',');
+  }
+
   constructor() {
     void this.load();
   }
@@ -68,6 +81,8 @@ export class DashboardComponent {
       this.metrics.set(Object.fromEntries(metrics.per_model.map((r) => [r.model, r])));
     } catch (e) {
       this.error.set(`Laden fehlgeschlagen: ${e}`);
+    } finally {
+      this.loading.set(false);
     }
   }
 }

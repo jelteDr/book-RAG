@@ -1,14 +1,35 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import {
+  FileText,
+  FolderOpen,
+  Layers,
+  LucideAngularModule,
+  MessageSquare,
+  Plus,
+  Trash2,
+} from 'lucide-angular';
 
 import { LibraryService } from '../library.service';
 import { Book, Collection, Group, UploadResult } from '../models';
+import { BannerComponent } from '../ui/banner.component';
+import { EmptyStateComponent } from '../ui/empty-state.component';
+import { PageHeaderComponent } from '../ui/page-header.component';
+import { SectionComponent } from '../ui/section.component';
 
 @Component({
   selector: 'app-groups',
   standalone: true,
-  imports: [FormsModule],
+  imports: [
+    FormsModule,
+    LucideAngularModule,
+    BannerComponent,
+    EmptyStateComponent,
+    PageHeaderComponent,
+    SectionComponent,
+  ],
+  host: { class: 'stagger block space-y-7' },
   templateUrl: './groups.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -18,6 +39,12 @@ export class GroupsComponent {
 
   readonly groups = signal<Group[]>([]);
   readonly error = signal('');
+  readonly loading = signal(true);
+
+  readonly icons = { FileText, FolderOpen, Layers, MessageSquare, Plus, Trash2 };
+
+  /** Löschen fragt einmal in der Zeile nach; Schlüssel z. B. "group:3", "book:12", "collection:1". */
+  readonly confirmDelete = signal<string | null>(null);
 
   // Formular "neue Gruppe" (Slug erzeugt das Backend aus dem Namen)
   readonly name = signal('');
@@ -58,6 +85,8 @@ export class GroupsComponent {
       this.collections.set(await this.library.listCollections());
     } catch (e) {
       this.error.set(`Gruppen laden fehlgeschlagen: ${e}`);
+    } finally {
+      this.loading.set(false);
     }
   }
 
@@ -88,6 +117,7 @@ export class GroupsComponent {
   }
 
   async deleteCollection(collection: Collection): Promise<void> {
+    this.confirmDelete.set(null);
     await this.library.deleteCollection(collection.id);
     this.collections.set(await this.library.listCollections());
   }
@@ -120,11 +150,13 @@ export class GroupsComponent {
   }
 
   async deleteGroup(group: Group): Promise<void> {
+    this.confirmDelete.set(null);
     await this.library.deleteGroup(group.id);
     await this.loadGroups();
   }
 
   async deleteBook(book: Book): Promise<void> {
+    this.confirmDelete.set(null);
     await this.library.deleteBook(book.id);
     await this.loadGroups();
   }

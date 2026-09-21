@@ -1,213 +1,274 @@
-<div class="max-w-3xl mx-auto w-full px-4 py-6 flex flex-col gap-6 overflow-y-auto h-full">
-  <div>
-    <h2 class="text-lg font-semibold">Dokumente</h2>
-    <p class="text-xs text-muted">Texte in Gruppen (Genre/Franchise) organisieren, hochladen und löschen.</p>
-  </div>
+<ui-page-header title="Dokumente" />
 
-  @if (error()) {
-    <div class="text-red-400 text-sm">{{ error() }}</div>
-  }
+@if (error()) {
+  <ui-banner tone="danger">{{ error() }} Prüfe, ob das Backend läuft, und lade die Seite neu.</ui-banner>
+}
 
-  <!-- Neue Gruppe (Slug wird automatisch aus dem Namen erzeugt) -->
-  <div class="bg-panel border border-edge rounded-xl p-4 flex flex-wrap gap-3 items-end">
-    <label class="flex flex-col gap-1 text-xs text-muted">
-      Name
+<!-- Neue Gruppe (Slug wird automatisch aus dem Namen erzeugt) -->
+<ui-section title="Neue Gruppe">
+  <form class="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" (ngSubmit)="createGroup()">
+    <div class="min-w-0">
+      <label class="field-label" for="group-name">Name</label>
       <input
-        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 w-48"
+        id="group-name"
+        name="group-name"
+        class="control"
         [ngModel]="name()"
         (ngModelChange)="name.set($event)"
         placeholder="z. B. Horror-Klassiker"
+        autocomplete="off"
       />
-    </label>
-    <label class="flex flex-col gap-1 text-xs text-muted">
-      Art
+    </div>
+    <div class="min-w-0">
+      <label class="field-label" for="group-kind">Art</label>
       <input
-        class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 w-40"
+        id="group-kind"
+        name="group-kind"
+        class="control"
         [ngModel]="kind()"
         (ngModelChange)="kind.set($event)"
-        placeholder="genre / franchise"
+        placeholder="Genre oder Franchise"
+        autocomplete="off"
       />
-    </label>
-    <button
-      class="bg-accent text-onaccent font-semibold rounded-lg px-4 py-1.5 disabled:opacity-50"
-      (click)="createGroup()"
-      [disabled]="!name().trim()"
-    >
-      Anlegen
-    </button>
-  </div>
+    </div>
+    <button type="submit" class="btn btn-primary" [disabled]="!name().trim()">Anlegen</button>
+  </form>
+</ui-section>
 
-  <!-- Gruppenliste -->
-  <div class="flex flex-col gap-3">
-    @for (g of groups(); track g.id) {
-      <div class="bg-panel border border-edge rounded-xl p-4">
-        <div class="flex items-center justify-between gap-2">
-          <div>
-            <div class="font-medium">{{ g.name }}</div>
-            <div class="text-xs text-muted">
-              {{ g.kind || '—' }} · {{ g.n_books ?? 0 }} Bücher
-            </div>
+<!-- Gruppen: je Gruppe ein Abschnitt, Bücher als Liste in der Karte -->
+@for (g of groups(); track g.id) {
+  <ui-section [title]="g.name" padded="false">
+    <span aside class="text-[13px] text-ink-muted">{{ g.kind || 'Gruppe' }} · {{ g.n_books ?? 0 }} Bücher</span>
+
+    <ul class="divide-y divide-line">
+      @for (b of booksOf(g.id); track b.id) {
+        <li class="flex flex-wrap items-center gap-x-3 py-2">
+          <span class="tile"><lucide-icon [img]="icons.FileText" [size]="18" aria-hidden="true" /></span>
+          <div class="min-w-0 flex-1">
+            <p class="truncate">{{ b.title || b.book_key }}</p>
+            <p class="truncate text-[13px] text-ink-muted">
+              {{ b.author || 'Autor unbekannt' }}<span class="sm:hidden"> · {{ b.n_chunks }} Chunks</span>
+            </p>
           </div>
-          <div class="flex gap-2 text-sm">
-            <button class="text-accent hover:underline" (click)="openChat(g)">💬 Chat starten</button>
-            <button class="text-accent hover:underline" (click)="openUpload(g)">+ Dokument</button>
-            <button class="text-red-400 hover:underline" (click)="deleteGroup(g)">Gruppe löschen</button>
+          <!-- Auf dem Handy steht die Chunk-Zahl in der Zweitzeile, damit der Titel Platz behält -->
+          <p class="hidden shrink-0 text-right font-display font-bold sm:block">
+            {{ b.n_chunks }} <span class="font-sans text-xs font-normal text-ink-muted">Chunks</span>
+          </p>
+          <div
+            class="flex items-center justify-end"
+            [class]="confirmDelete() === 'book:' + b.id ? 'w-full sm:w-auto' : ''"
+          >
+            @if (confirmDelete() === 'book:' + b.id) {
+              <button type="button" class="btn btn-sm btn-danger" (click)="deleteBook(b)">Löschen</button>
+              <button type="button" class="btn btn-sm btn-ghost" (click)="confirmDelete.set(null)">Nein</button>
+            } @else {
+              <button
+                type="button"
+                class="icon-btn hover:!text-danger"
+                [attr.aria-label]="'Dokument löschen: ' + (b.title || b.book_key)"
+                title="Dokument löschen"
+                (click)="confirmDelete.set('book:' + b.id)"
+              >
+                <lucide-icon [img]="icons.Trash2" [size]="18" aria-hidden="true" />
+              </button>
+            }
+          </div>
+        </li>
+      } @empty {
+        <li class="py-4 text-sm text-ink-muted">Noch keine Dokumente. Lade unten das erste hoch.</li>
+      }
+    </ul>
+
+    <div class="-mx-4 flex flex-wrap items-center gap-2 border-t border-line px-4 py-3">
+      <button type="button" class="btn btn-sm btn-primary" (click)="openChat(g)">
+        <lucide-icon [img]="icons.MessageSquare" [size]="16" aria-hidden="true" />
+        Chat starten
+      </button>
+      <button type="button" class="btn btn-sm btn-secondary" (click)="openUpload(g)">
+        <lucide-icon [img]="icons.Plus" [size]="16" aria-hidden="true" />
+        Dokument hochladen
+      </button>
+      <div class="ml-auto flex items-center">
+        @if (confirmDelete() === 'group:' + g.id) {
+          <span class="mr-1 text-sm text-ink-muted">Gruppe mit allen Dokumenten löschen?</span>
+          <button type="button" class="btn btn-sm btn-danger" (click)="deleteGroup(g)">Löschen</button>
+          <button type="button" class="btn btn-sm btn-ghost" (click)="confirmDelete.set(null)">Nein</button>
+        } @else {
+          <button type="button" class="btn btn-sm btn-danger" (click)="confirmDelete.set('group:' + g.id)">
+            Gruppe löschen
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Upload-Panel -->
+    @if (uploadGroupId() === g.id) {
+      <div class="-mx-4 animate-rise space-y-3 border-t border-line px-4 py-4">
+        <div>
+          <label class="field-label" [for]="'upload-file-' + g.id">Textdatei (.txt)</label>
+          <input
+            [id]="'upload-file-' + g.id"
+            type="file"
+            accept=".txt"
+            class="block w-full min-w-0 text-sm text-ink-muted file:mr-3 file:h-9 file:cursor-pointer file:rounded-xl file:border-0 file:bg-surface-muted file:px-3.5 file:text-sm file:font-semibold file:text-accent"
+            (change)="onFile($event)"
+          />
+        </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div class="min-w-0">
+            <label class="field-label" [for]="'upload-title-' + g.id">Titel</label>
+            <input
+              [id]="'upload-title-' + g.id"
+              class="control"
+              [ngModel]="uploadTitle()"
+              (ngModelChange)="uploadTitle.set($event)"
+              placeholder="sonst der Dateiname"
+            />
+          </div>
+          <div class="min-w-0">
+            <label class="field-label" [for]="'upload-author-' + g.id">Autor</label>
+            <input
+              [id]="'upload-author-' + g.id"
+              class="control"
+              [ngModel]="uploadAuthor()"
+              (ngModelChange)="uploadAuthor.set($event)"
+              placeholder="optional"
+            />
           </div>
         </div>
-
-        <!-- Dokumente (immer sichtbar) -->
-        <div class="mt-3 border-t border-edge pt-3 flex flex-col gap-1.5">
-          @for (b of booksOf(g.id); track b.id) {
-            <div class="flex items-center justify-between text-sm">
-              <span>📄 {{ b.title || b.book_key }} — {{ b.author || '—' }} · {{ b.n_chunks }} Chunks</span>
-              <button class="text-red-400 hover:underline text-xs" (click)="deleteBook(b)">entfernen</button>
-            </div>
-          } @empty {
-            <div class="text-xs text-muted">Noch keine Dokumente — „+ Dokument" zum Hochladen.</div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="btn btn-secondary" (click)="dryRun(g)" [disabled]="!file() || busy()">
+            Prüfen
+          </button>
+          <button type="button" class="btn btn-primary" (click)="commit(g)" [disabled]="!file() || busy()">
+            Übernehmen
+          </button>
+          <button type="button" class="btn btn-ghost" (click)="uploadGroupId.set(null)" [disabled]="busy()">
+            Abbrechen
+          </button>
+          @if (busy()) {
+            <span class="text-sm text-ink-muted" aria-live="polite">Läuft …</span>
           }
         </div>
 
-        <!-- Upload-Panel -->
-        @if (uploadGroupId() === g.id) {
-          <div class="mt-3 border-t border-edge pt-3 flex flex-col gap-2">
-            <input type="file" accept=".txt" class="text-sm" (change)="onFile($event)" />
-            <div class="flex flex-wrap gap-2">
-              <input
-                class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 text-sm w-52"
-                [ngModel]="uploadTitle()"
-                (ngModelChange)="uploadTitle.set($event)"
-                placeholder="Titel (optional, sonst Dateiname)"
-              />
-              <input
-                class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 text-sm w-52"
-                [ngModel]="uploadAuthor()"
-                (ngModelChange)="uploadAuthor.set($event)"
-                placeholder="Autor (optional)"
-              />
-            </div>
-            <div class="flex gap-2">
-              <button
-                class="bg-panel2 border border-edge rounded-lg px-3 py-1 text-sm disabled:opacity-50"
-                (click)="dryRun(g)"
-                [disabled]="!file() || busy()"
-              >
-                Prüfen (Dry-Run)
-              </button>
-              <button
-                class="bg-accent text-onaccent font-semibold rounded-lg px-3 py-1 text-sm disabled:opacity-50"
-                (click)="commit(g)"
-                [disabled]="!file() || busy()"
-              >
-                Übernehmen (Commit)
-              </button>
-              @if (busy()) {
-                <span class="text-xs text-muted self-center">läuft…</span>
-              }
-            </div>
-
-            @if (report(); as r) {
-              <div class="bg-panel2 border border-edge rounded-lg p-3 text-xs text-muted">
-                <div class="text-ink">
-                  Cleaning-Report — Titel: {{ r.title || '?' }}, Autor: {{ r.author || '?' }}
-                </div>
-                <div>
-                  bereinigte Zeichen: {{ r.report.cleaned_chars }} · gemergte Zeilen:
-                  {{ r.report.lines_merged }} · Verlust: {{ r.report.dropped_ratio }}
-                </div>
-                @if (r.report.validation_errors?.length) {
-                  <div class="text-red-400 font-medium mt-1">
-                    ✗ Validierung fehlgeschlagen — nicht ingestet:
-                    <ul class="list-disc ml-4 font-normal">
-                      @for (e of r.report.validation_errors; track e) {
-                        <li>{{ e }}</li>
-                      }
-                    </ul>
-                  </div>
-                }
-                @if (r.report.warnings?.length) {
-                  <div class="text-amber-400">⚠ {{ r.report.warnings.join('; ') }}</div>
-                }
-                <div class="mt-1 italic">„{{ r.report.after_sample }}…"</div>
-              </div>
+        @if (report(); as r) {
+          <div class="space-y-2 rounded-xl bg-surface-muted p-3.5 text-[13px] text-ink-muted">
+            <p class="break-words text-ink">
+              Prüfbericht · Titel: {{ r.title || '?' }}, Autor: {{ r.author || '?' }}
+            </p>
+            <p>
+              {{ r.report.cleaned_chars }} bereinigte Zeichen · {{ r.report.lines_merged }} zusammengeführte
+              Zeilen · Verlust {{ r.report.dropped_ratio }}
+            </p>
+            @if (r.report.validation_errors?.length) {
+              <ui-banner tone="danger">
+                Nicht übernommen. Behebe das in der Datei und lade sie erneut hoch:
+                <ul class="ml-4 list-disc">
+                  @for (e of r.report.validation_errors; track e) {
+                    <li>{{ e }}</li>
+                  }
+                </ul>
+              </ui-banner>
             }
+            @if (r.report.warnings?.length) {
+              <ui-banner tone="warn">{{ r.report.warnings.join('; ') }}</ui-banner>
+            }
+            <p class="break-words italic">„{{ r.report.after_sample }} …“</p>
           </div>
         }
       </div>
-    } @empty {
-      <div class="text-sm text-muted">Noch keine Gruppen — oben eine anlegen.</div>
     }
-  </div>
+  </ui-section>
+} @empty {
+  @if (loading()) {
+    <p class="px-4 text-sm text-ink-muted">Lädt …</p>
+  } @else if (!error()) {
+    <ui-empty-state>Noch keine Gruppen. Lege oben die erste an.</ui-empty-state>
+  }
+}
 
-  <!-- Sammelgruppen: mehrere Gruppen unter einem Slug bündeln (ohne Re-Upload) -->
-  <div>
-    <h2 class="text-lg font-semibold">Sammelgruppen</h2>
-    <p class="text-xs text-muted">
-      Bündeln bestehende Gruppen für den Chat (z. B. „Fantasy" = mehrere Franchises) — die
-      Texte bleiben, wo sie sind.
+<!-- Sammelgruppen: mehrere Gruppen unter einem Slug bündeln (ohne Re-Upload) -->
+<ui-section title="Neue Sammelgruppe">
+  <form class="space-y-4" (ngSubmit)="createCollection()">
+    <p class="text-sm text-ink-muted">
+      Bündelt bestehende Gruppen für den Chat, z. B. „Fantasy“ aus mehreren Franchises. Die Texte bleiben,
+      wo sie sind.
     </p>
-  </div>
-
-  <div class="bg-panel border border-edge rounded-xl p-4 flex flex-col gap-3">
-    <div class="flex flex-wrap gap-3 items-end">
-      <label class="flex flex-col gap-1 text-xs text-muted">
-        Name
+    <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <div class="min-w-0">
+        <label class="field-label" for="collection-name">Name</label>
         <input
-          class="bg-panel2 text-ink border border-edge rounded-md px-2 py-1 w-48"
+          id="collection-name"
+          name="collection-name"
+          class="control"
           [ngModel]="colName()"
           (ngModelChange)="colName.set($event)"
           placeholder="z. B. Fantasy"
+          autocomplete="off"
         />
-      </label>
-      <button
-        class="bg-accent text-onaccent font-semibold rounded-lg px-4 py-1.5 disabled:opacity-50"
-        (click)="createCollection()"
-        [disabled]="!colName().trim() || !colMembers().size"
-      >
+      </div>
+      <button type="submit" class="btn btn-primary" [disabled]="!colName().trim() || !colMembers().size">
         Anlegen
       </button>
     </div>
-    <div class="flex flex-wrap gap-3 text-sm">
-      <span class="text-xs text-muted self-center">Mitglieder:</span>
-      @for (g of groups(); track g.id) {
-        <label class="flex items-center gap-1.5 cursor-pointer">
-          <input
-            type="checkbox"
-            [checked]="colMembers().has(g.slug)"
-            (change)="toggleMember(g.slug)"
-          />
-          {{ g.name }}
-        </label>
-      } @empty {
-        <span class="text-xs text-muted">Erst Gruppen anlegen.</span>
-      }
-    </div>
-  </div>
-
-  <div class="flex flex-col gap-3">
-    @for (c of collections(); track c.id) {
-      <div class="bg-panel border border-edge rounded-xl p-4">
-        <div class="flex items-center justify-between gap-2">
-          <div>
-            <div class="font-medium">{{ c.name }}</div>
-            <div class="text-xs text-muted">
-              {{ c.n_books }} Bücher ·
-              @for (m of c.members; track m.slug) {
-                <span class="inline-block bg-panel2 border border-edge rounded-full px-2 py-0.5 mr-1">
-                  {{ m.name }}
-                </span>
-              }
-            </div>
-          </div>
-          <div class="flex gap-2 text-sm shrink-0">
-            <button class="text-accent hover:underline" (click)="openCollectionChat(c)">
-              💬 Chat starten
-            </button>
-            <button class="text-red-400 hover:underline" (click)="deleteCollection(c)">löschen</button>
-          </div>
-        </div>
+    <fieldset class="min-w-0">
+      <legend class="field-label">Mitglieder</legend>
+      <div class="flex flex-wrap gap-2">
+        @for (g of groups(); track g.id) {
+          <button
+            type="button"
+            class="inline-flex h-9 max-w-full items-center rounded-full px-3.5 text-sm font-medium transition-colors"
+            [class]="colMembers().has(g.slug) ? 'bg-accent text-accent-fg' : 'bg-surface-muted text-ink'"
+            [attr.aria-pressed]="colMembers().has(g.slug)"
+            (click)="toggleMember(g.slug)"
+          >
+            <span class="truncate">{{ g.name }}</span>
+          </button>
+        } @empty {
+          <span class="text-sm text-ink-muted">Lege zuerst Gruppen an.</span>
+        }
       </div>
+    </fieldset>
+  </form>
+</ui-section>
+
+<ui-section title="Sammelgruppen" padded="false">
+  <ul class="divide-y divide-line">
+    @for (c of collections(); track c.id) {
+      <li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+        <span class="tile"><lucide-icon [img]="icons.Layers" [size]="18" aria-hidden="true" /></span>
+        <div class="min-w-0 flex-1">
+          <p class="truncate">{{ c.name }}</p>
+          <p class="truncate text-[13px] text-ink-muted">
+            {{ c.n_books }} Bücher ·
+            @for (m of c.members; track m.slug; let last = $last) {
+              {{ m.name }}{{ last ? '' : ', ' }}
+            }
+          </p>
+        </div>
+        <div class="flex w-full items-center justify-end sm:w-auto">
+          @if (confirmDelete() === 'collection:' + c.id) {
+            <button type="button" class="btn btn-sm btn-danger" (click)="deleteCollection(c)">Löschen</button>
+            <button type="button" class="btn btn-sm btn-ghost" (click)="confirmDelete.set(null)">Nein</button>
+          } @else {
+            <button type="button" class="btn btn-sm btn-ghost" (click)="openCollectionChat(c)">
+              <lucide-icon [img]="icons.MessageSquare" [size]="16" aria-hidden="true" />
+              Chat starten
+            </button>
+            <button
+              type="button"
+              class="icon-btn hover:!text-danger"
+              [attr.aria-label]="'Sammelgruppe löschen: ' + c.name"
+              title="Sammelgruppe löschen"
+              (click)="confirmDelete.set('collection:' + c.id)"
+            >
+              <lucide-icon [img]="icons.Trash2" [size]="18" aria-hidden="true" />
+            </button>
+          }
+        </div>
+      </li>
     } @empty {
-      <div class="text-sm text-muted">Noch keine Sammelgruppen.</div>
+      <li class="py-4 text-sm text-ink-muted">Noch keine Sammelgruppen.</li>
     }
-  </div>
-</div>
+  </ul>
+</ui-section>

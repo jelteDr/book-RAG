@@ -2,32 +2,80 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Light (Default) */
+/*
+ * Design-Tokens – Apple-naher Stil („inset grouped“, siehe DESIGN.md).
+ * Templates benutzen ausschließlich die semantischen Tailwind-Namen (tailwind.config.js),
+ * nie rohe Farbwerte. Hell/Dunkel hängt am data-theme-Attribut (ThemeService).
+ */
 :root {
-  --c-bg: #f7f8fa;
-  --c-panel: #ffffff;
-  --c-panel2: #eef1f5;
-  --c-ink: #1a1d23;
-  --c-muted: #5b6472;
-  --c-accent: #2563eb;
-  --c-on-accent: #ffffff;
-  --c-userbubble: #dbeafe;
-  --c-edge: #d7dce3;
+  --canvas: #f2f2f7;
+  --surface: #ffffff;
+  --surface-muted: #e9e9ee;
+  --line: #d9d9de;
+  --line-strong: #818187;
+  --ink: #1d1d1f;
+  --ink-muted: #636368;
+  --accent: #1c7331;
+  --accent-hover: #175f28;
+  --accent-fg: #ffffff;
+  --accent-soft: #e1f3e6;
+  --danger: #c9000f;
+  --danger-soft: #fdeaec;
+  --info: #0040dd;
+  --info-soft: #e5eeff;
+  --warn: #a34700;
+  --warn-soft: #fff1e0;
+  --overlay: rgb(0 0 0 / 0.3);
+  --shadow-pop: 0 10px 40px rgb(0 0 0 / 0.16), 0 0 0 0.5px rgb(0 0 0 / 0.08);
+  --shadow-thumb: 0 1px 3px rgb(0 0 0 / 0.14), 0 0 0 0.5px rgb(0 0 0 / 0.06);
+  --bar: rgb(242 242 247 / 0.78);
+  --menu: rgb(255 255 255 / 0.95);
+
+  /* Diagramme: Datenfarben, bewusst getrennt vom UI-Akzent */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
   color-scheme: light;
 }
 
-/* Dark */
-.dark {
-  --c-bg: #0f1115;
-  --c-panel: #171a21;
-  --c-panel2: #1e222b;
-  --c-ink: #e6e8ec;
-  --c-muted: #9aa3b2;
-  --c-accent: #6ea8fe;
-  --c-on-accent: #0b1020;
-  --c-userbubble: #24405f;
-  --c-edge: #2a2f3a;
+[data-theme='dark'] {
+  --canvas: #000000;
+  --surface: #1c1c1e;
+  --surface-muted: #2c2c2e;
+  --line: #38383a;
+  --line-strong: #7c7c80;
+  --ink: #f5f5f7;
+  --ink-muted: #a1a1a6;
+  --accent: #30d158;
+  --accent-hover: #5ee07f;
+  --accent-fg: #00210a;
+  --accent-soft: #12301b;
+  --danger: #ff6961;
+  --danger-soft: #3a1614;
+  --info: #6cb2ff;
+  --info-soft: #0f2440;
+  --warn: #ffb340;
+  --warn-soft: #33240a;
+  --overlay: rgb(0 0 0 / 0.55);
+  --shadow-pop: 0 10px 40px rgb(0 0 0 / 0.6), 0 0 0 0.5px rgb(255 255 255 / 0.12);
+  --shadow-thumb: 0 1px 3px rgb(0 0 0 / 0.4);
+  --bar: rgb(0 0 0 / 0.72);
+  --menu: rgb(28 28 30 / 0.95);
+
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
   color-scheme: dark;
+}
+
+:root {
+  /* Tailwind v3 kann bei var()-Farben keine /25-Deckkraft – deshalb eigene Tokens. */
+  --accent-ring: color-mix(in srgb, var(--accent) 25%, transparent);
+  --danger-ring: color-mix(in srgb, var(--danger) 25%, transparent);
+  --line-soft: color-mix(in srgb, var(--line) 70%, transparent);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html {
+  font-size: 16px;
 }
 
 html,
@@ -37,8 +85,8 @@ body {
 }
 
 body {
-  @apply bg-bg text-ink;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  @apply bg-canvas font-sans text-ink antialiased;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Formular-Elemente erben die Schrift NICHT automatisch (Browser-Default) —
@@ -51,4 +99,122 @@ textarea {
   font-size: inherit;
   line-height: inherit;
   color: inherit;
+}
+
+/* Kennzahlen: SF Rounded, leicht enger gesetzt wie Apples große Titel */
+.font-display {
+  letter-spacing: -0.02em;
+}
+
+@layer components {
+  /* Schaltflächen: gefüllt (primär), getönt (sekundär), reiner Text (ghost/danger) */
+  .btn {
+    @apply inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 font-semibold transition-[background-color,filter,opacity,transform] active:scale-[0.97] active:opacity-80 disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-sm {
+    @apply h-9 px-3.5 text-sm;
+  }
+  .btn-primary {
+    @apply bg-accent text-accent-fg hover:bg-accent-hover;
+  }
+  .btn-secondary {
+    @apply bg-surface-muted text-accent hover:brightness-95 dark:hover:brightness-125;
+  }
+  .btn-ghost {
+    @apply text-accent hover:bg-surface-muted;
+  }
+  .btn-danger {
+    @apply text-danger hover:bg-danger-soft;
+  }
+
+  /* Runder Icon-Button mit 44-px-Trefferfläche; braucht immer ein aria-label */
+  .icon-btn {
+    @apply inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink-muted transition-[background-color,color,opacity,transform] hover:bg-surface-muted hover:text-ink active:scale-[0.97] active:opacity-80 disabled:pointer-events-none disabled:opacity-40;
+  }
+  .icon-btn-danger {
+    @apply text-danger hover:bg-danger-soft hover:text-danger;
+  }
+
+  /* Eingabefelder */
+  .control {
+    @apply h-11 w-full rounded-sm border border-line-strong bg-surface px-3 text-ink transition-shadow placeholder:text-ink-muted focus-visible:border-accent focus-visible:outline-none disabled:opacity-60;
+  }
+  .control:focus-visible {
+    box-shadow: 0 0 0 4px var(--accent-ring);
+  }
+  .control[aria-invalid='true'] {
+    @apply border-danger;
+  }
+  .control[aria-invalid='true']:focus-visible {
+    box-shadow: 0 0 0 4px var(--danger-ring);
+  }
+  .field-label {
+    @apply mb-1.5 block text-[13px] font-medium text-ink-muted;
+  }
+
+  /* Popover-Menüs: durchscheinend, weicher Schatten */
+  .menu {
+    @apply z-40 min-w-60 max-w-[calc(100vw-2rem)] animate-rise rounded-2xl p-2 shadow-pop backdrop-blur-xl;
+    background-color: var(--menu);
+  }
+  .menu-item {
+    @apply flex min-h-11 w-full items-center justify-between gap-3 rounded-[10px] px-3 text-left text-[15px] text-ink hover:bg-surface-muted;
+  }
+  .menu-title {
+    @apply px-3 pb-1 pt-2 text-xs font-medium text-ink-muted;
+  }
+
+  /* Icon-Kachel links in Listenzeilen */
+  .tile {
+    @apply grid size-9 shrink-0 place-items-center rounded-[9px] bg-accent-soft text-accent;
+  }
+}
+
+/* Gestaffeltes Einblenden der Seitenabschnitte (einmal pro Seitenwechsel) */
+.stagger > * {
+  animation: rise 0.24s var(--ease-out) both;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.stagger > *:nth-child(n + 5) {
+  animation-delay: 160ms;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes drawer {
+  from {
+    transform: translateX(-100%);
+  }
 }

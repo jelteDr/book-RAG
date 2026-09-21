@@ -23,7 +23,10 @@
           },
           "configurations": {
             "production": {
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "fileReplacements": [
+                { "replace": "src/dev/dev-tools.ts", "with": "src/dev/dev-tools.prod.ts" }
+              ]
             },
             "development": {
               "optimization": false,
