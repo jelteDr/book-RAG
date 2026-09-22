@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 from app.clients.ollama_client import OllamaClient  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
+from app.graph.service import GraphService  # noqa: E402
 from app.rag.expander import expand_points  # noqa: E402
 from app.rag.prompt_builder import build_messages  # noqa: E402
 from app.rag.retriever import retrieve  # noqa: E402
@@ -163,7 +164,16 @@ async def main() -> None:
                     help="Small-to-Big (Exp 7) auf die Treffer anwenden, wie im Prod-Pfad")
     ap.add_argument("--s2b-window", type=int, default=settings.s2b_window)
     ap.add_argument("--s2b-top-n", type=int, default=settings.s2b_top_n)
+    ap.add_argument("--graph", choices=["off", "link", "expand"], default="off",
+                    help="Graph-RAG-Arm (Exp 8) statt dense Retrieval; Graph aus --graph-dir")
+    ap.add_argument("--graph-dir", default=settings.graph_dir)
     args = ap.parse_args()
+    graph = None
+    if args.graph != "off":
+        graph = GraphService(args.graph_dir, True, args.graph, alpha=settings.graph_alpha,
+                             top_m=settings.graph_top_m, min_sim=settings.graph_min_sim)
+        if not graph.active:
+            sys.exit(f"Kein Graph unter {args.graph_dir} — erst make graph + make graph-build.")
 
     from rouge_score import rouge_scorer
 
@@ -179,7 +189,8 @@ async def main() -> None:
     try:
         for item in gold:
             unanswerable = item.get("qtype") == "unanswerable"
-            pts = await retrieve(
+            retriever = graph.retrieve if graph is not None else retrieve
+            pts = await retriever(
                 item["question"], ollama=ollama, vectors=vectors,
                 embed_model=settings.embed_model, top_k=args.k, group_id=args.group,
             )
@@ -243,7 +254,7 @@ async def main() -> None:
     answered = [r for r in answerable if not r["refused"]]
 
     print(f"\n=== Aggregat (n={len(rows)}, Modell={args.model}, k={args.k}, "
-          f"s2b={'an' if args.s2b else 'aus'}) ===")
+          f"s2b={'an' if args.s2b else 'aus'}, graph={args.graph}) ===")
     print(f"  ANTWORT (beantwortet, n={len(answered)}):")
     print(f"    ROUGE-L (mean):      {mean(answered, 'rougeL'):.3f}")
     print(f"    Antwort-F1 (mean):   {mean(answered, 'answer_f1'):.3f}")
@@ -267,7 +278,8 @@ async def main() -> None:
     out = Path(__file__).resolve().parent.parent / "results" / "answer_eval.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(
-        {"model": args.model, "k": args.k, "s2b": args.s2b, "rows": rows}, indent=2
+        {"model": args.model, "k": args.k, "s2b": args.s2b, "graph": args.graph, "rows": rows},
+        indent=2
     ))
     print(f"\nRoh-Ergebnisse: {out}")
 

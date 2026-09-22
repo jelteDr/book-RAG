@@ -296,6 +296,45 @@ komplett. Das dürfte einen Teil der niedrigen Faithfulness (0.667) und der
 Zitat-Ausfälle erklären. Fix: `OLLAMA_CONTEXT_LENGTH=16384` (make-Target
 `ollama-ctx`), danach Metrik-Suite neu laufen lassen.
 
+## Exp 8 — Graph-RAG lokal (`eval/graph_experiment.py`)
+
+**Idee:** Je Chunk extrahiert das Chat-LLM (qwen2.5:7b, temp 0, JSON-Modus) bis zu 8
+Entities (PERSON/PLACE/ORGANISATION/OBJECT/EVENT) und Relationen; daraus entsteht ein
+Entity-Graph (`backend/app/graph/`, Knoten = normalisierte Entities mit Aliasen, Kanten =
+Ko-Erwähnung, `idf = ln(N/n_mentions)` dämpft Hubs wie Dracula). Beim Retrieval wird die
+**deutsche** Frage per bge-m3 gegen die **englischen** Entity-Embeddings verlinkt
+(kein String-Match), 1-Hop-Nachbarn gedämpft aktiviert, und jeder Chunk bekommt ein
+Graph-Signal `g(c) = Σ a(e)·idf(e)`. Fusion **dense-erhaltend**:
+`s = cos(q,c) + α·g̃(c)` — bei α=0 exakt die Baseline (Sanity-Check im Skript). Bewusst
+kein RRF (Exp 2/6: Rang-Fusion verdrängte dense-Treffer).
+
+Arme: `dense` (Baseline, contextual + dedup), `link` (Entity-Linking), `expand`
+(dense-first, Seeds aus Top-3, Ko-Erwähnung ≥ 2), `graph_only` (Diagnose ohne dense).
+
+**Hypothese (vorab festgelegt, vor dem Messlauf committet):**
+- H1: Entity-Linking holt Passagen in die Top-8, die die gefragten Figuren/Orte nur
+  beiläufig erwähnen (dense rankt sie tief) → Hit@8 ↑, MRR mindestens gleich.
+- H2: Der Effekt konzentriert sich auf `multi`/`paraphrase` (n09 Demeter, n10 Erdkisten,
+  n11 Minas Hilfe: Passagen über mehrere Kapitel, wenig lexikalische Überlappung).
+- **Erfolg:** paired besser ≥ 2·schlechter **und** ΔMRR ≥ +0.03 **und** Hit@8 nicht
+  schlechter. **Negativ:** schlechter ≥ besser oder Hit@8 sinkt. Dazwischen: „kein
+  messbarer Effekt bei n=32". Hyperparameter a priori: α=0.03, m=5, τ=0.45; die
+  Sensitivität (α∈{0.02,0.05}, τ∈{0.40,0.50}) ist **post hoc** und dient nur der
+  Einordnung, nicht der Auswahl (kein Dev-Split bei n=32).
+
+**Setup:** Gold v2, n=32 beantwortbar, k=8, Gruppe Horror (Live-Index contextual+dedup),
+paired. Extraktion: 581 Aufrufe, Pilot 8,8 s/Chunk, 0 % JSON-Fehler nach Umstellung auf
+kompaktes JSON (max_tokens 600; Pilot v1 mit 450 schnitt 40 % ab).
+
+| Arm | Hit@1 | Hit@8 | MRR | Cov@8 |
+|---|---|---|---|---|
+| dense | 0.31 | 0.81 | 0.474 | — |
+| link | _(Messlauf folgt)_ | | | |
+| expand | | | | |
+| graph_only | | | | |
+
+**Befund:** _(folgt nach dem Messlauf)_
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
@@ -307,3 +346,5 @@ Zitat-Ausfälle erklären. Fix: `OLLAMA_CONTEXT_LENGTH=16384` (make-Target
 4. Bootstrap-CI / paired Test, sobald n≥30.
 5. ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in via
    `RERANKER_ENABLED`, s. README).
+6. Exp 8 — Graph-RAG lokal (Hypothese oben, Messlauf folgt); danach Stufe 2:
+   Community-Summaries für thematische Fragen (eigenes Gold-Set, Exp 9).
