@@ -335,6 +335,55 @@ kompaktes JSON (max_tokens 600; Pilot v1 mit 450 schnitt 40 % ab).
 
 **Befund:** _(folgt nach dem Messlauf)_
 
+## Exp 9 — Graph-RAG global: Community-Berichte (`eval/global_graph_experiment.py`)
+
+**Idee:** Der lokale Pfad (Exp 8) findet Passagen. Die eigentliche Stärke von Graph-RAG
+(Microsoft-Stil) liegt bei **thematischen** Fragen über den ganzen Roman („Wie entwickelt
+sich Minas Rolle?"), für die keine einzelne Passage reicht. Dafür: Louvain-Communities auf
+dem Entity-Graphen (Seed 42, deterministisch, Pruning `n_mentions ≥ 2`, `min_size 3`),
+je Community ein englischer LLM-Bericht (title/summary/findings, JSON, temp 0), Berichte
+mit bge-m3 eingebettet. Globaler Pfad: Frage → Top-m Berichte → Quellen = je Bericht `[i]`
+plus 2 repräsentative Originalpassagen `[i+1]`, `[i+2]` (Zitate bleiben im Buchtext
+verankert; Frontend-Chips funktionieren unverändert, Chip = „Zusammenfassung: <Titel>").
+Arm `global_map` zusätzlich mit Map-Step (je Bericht ein Aufruf: relevante Punkte 0–100).
+
+**Warum ein eigenes Gold-Set:** Auf der Span-Metrik kann ein globaler Pfad strukturell nicht
+gewinnen (er liefert Berichte, keine Passagen). `eval/gold_global.jsonl`: 10 thematische
+Dracula-Fragen (DE) mit Rubrik = 3–5 Kernpunkte, **vor** der Berichtserstellung aus
+Buchwissen geschrieben (Leakage-Regel, Datum im `note`-Feld; vom Nutzer kuratiert). Dazu
+3 Kontroll-Items aus gold_v2 (Faktfragen, Rubrik = Gold-Antwort), bei denen global
+erwartungsgemäß **verlieren** sollte — das begründet das Routing statt eines Globalschalters.
+
+**Metriken:** Rubrik-Abdeckung per LLM-Judge (qwen2.5:7b, ein Aufruf je Kernpunkt, JA/NEIN,
+blind, gemischte Reihenfolge) mit Kalibrierung im selben Lauf (Verweigerung → soll ≈ 0 %,
+Rubrik als Antwort → soll ≈ 100 %); NLI-Faithfulness `faith_chunks` nur gegen Buch-Chunks
+(für alle Arme gleich definiert) und `faith_sources` inkl. Berichte; TTFT/e2e/Länge/
+LLM-Aufrufe/Zitatquote; paired Coverage `global_* vs dense16` (dense16 = k=16 als starke
+Baseline für breite Fragen).
+
+**Hypothese (vorab):** Community-Berichte liefern bei thematischen Fragen mehr Kernpunkte
+als 8 oder 16 Einzelpassagen, bei moderat niedrigerer Verankerung im Buchtext.
+- **Positiv:** Coverage(global) ≥ Coverage(dense16) + 0.15 **und** paired ≥ 6/10 besser
+  **und** `faith_chunks` ≥ dense16 − 0.15.
+- **Negativ:** Coverage ≤ dense16 **oder** `faith_chunks` < 0.35 (Halluzinationsverdacht)
+  **oder** Judge-Kalibrierung außerhalb [≤ 20 %, ≥ 80 %] (→ nicht interpretierbar, wird
+  so berichtet).
+- Dazwischen „gemischt": Produktdefault bleibt `local`.
+- Erwartung Kontroll-Items: global schlechter als dense8.
+
+**Setup:** Gruppe Horror (Live-Index), m=6, 2 Passagen je Bericht, temp 0, n=10 global
++ 3 Kontrolle; Judge = Antwortmodell (Bias benannt: gleicher Judge für alle Arme,
+Hand-Stichprobe ≥ 3 Fragen × alle Arme als Spalte `manual_coverage`).
+
+| Arm | Coverage | Cov. Kontrolle | faith_chunks | faith_sources | Ø Aufrufe | Ø e2e |
+|---|---|---|---|---|---|---|
+| dense8 | _(Messlauf folgt)_ | | | | 1 | |
+| dense16 | | | | | 1 | |
+| global_direct | | | | | 1 | |
+| global_map | | | | | m+1 | |
+
+**Befund:** _(folgt nach dem Messlauf)_
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
@@ -346,5 +395,6 @@ kompaktes JSON (max_tokens 600; Pilot v1 mit 450 schnitt 40 % ab).
 4. Bootstrap-CI / paired Test, sobald n≥30.
 5. ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in via
    `RERANKER_ENABLED`, s. README).
-6. Exp 8 — Graph-RAG lokal (Hypothese oben, Messlauf folgt); danach Stufe 2:
-   Community-Summaries für thematische Fragen (eigenes Gold-Set, Exp 9).
+6. Exp 8 — Graph-RAG lokal (Hypothese oben, Messlauf folgt).
+7. Exp 9 — Graph-RAG global (Hypothese oben; Gold-Set-Entwurf vom Nutzer kuratieren,
+   dann `make graph-communities` + `make eval-global`).
