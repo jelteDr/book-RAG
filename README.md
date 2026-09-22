@@ -176,11 +176,16 @@ Git Flow: `main` (stabil) ← `develop` (Integration) ← `feature/*`. Commits a
 
 ## Grenzen & Roadmap
 
-- Eval-Set klein (n=21, kapitel-basiert) → **Gold-Set v2 mit Span-Labels + n≥30–50** ist in
-  Kuration (`notebooks/gold_set_v2.ipynb`); danach Eval-Skripte auf Span-Overlap-Metrik umstellen.
-- **Contextual Retrieval** (LLM-generierter Chunk-Kontext beim Ingest) als nächstes Experiment.
-- **Sparse-Hybrid** mit bge-m3-eigenen Sparse-Gewichten (adressiert das cross-linguale
-  BM25-Handicap aus Exp 2).
+- ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items); alle Eval-Skripte messen span-basiert.
+  Ausbau auf n≥50 bleibt sinnvoll (Exp 8 zeigt: 25 von 32 Items bewegen sich gar nicht).
+- ~~Contextual Retrieval~~ ✅ gemessen + produktiv (Exp 5, stärkster Hebel: span-MRR +0.054).
+- ~~Sparse-Hybrid (bge-m3)~~ ✅ gemessen — ehrliches Negativ-Ergebnis (Exp 6), nicht in der Pipeline.
+- ~~Small-to-Big~~ ✅ gemessen (Exp 7, MRR 0.474→0.540), opt-in `SMALL_TO_BIG_ENABLED`.
+- **Graph-RAG** (`backend/app/graph/`, opt-in `GRAPH_RAG_ENABLED`): Entity-Graph aus einer
+  LLM-Extraktion je Chunk. **Exp 8 (lokal, Entity-Linking / Nachbar-Expansion): kein messbarer
+  Effekt** auf der Span-Metrik (paired 4:3:25) — Flag bleibt aus. **Exp 9 (global,
+  Community-Berichte für thematische Fragen, eigenes Gold-Set + LLM-Judge): offen.**
+  Details, Hypothesen vorab und Zahlen in `eval/RESULTS.md`.
 - Bewusst minimal (lokales Projekt): kein Auth/CORS/Rate-Limiting.
 - ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in, s. o.).
 - ~~Ingestion-UI, Gruppen-Verwaltung, Modellwechsel-UI~~ ✅ umgesetzt.

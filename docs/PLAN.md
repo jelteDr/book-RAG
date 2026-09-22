@@ -7,6 +7,8 @@
 > - **M3 und M4 sind umgesetzt** (Upload-UI mit Dry-Run-Gate, Gruppen + Qdrant-Filter,
 >   DELETE/PATCH, Modell-Auswahl, NLI-Faithfulness opt-in inline) — darüber hinaus:
 >   Sammelgruppen (Collections), Dashboard, Chat-Persistenz mit Verlauf, Auto-Slug.
+> - **Graph-RAG-Experiment (September 2026, `backend/app/graph/`):** Exp 8 lokal gemessen
+>   (kein messbarer Effekt, Flag aus), Exp 9 global (Community-Berichte) offen — `eval/RESULTS.md`.
 > - Aktueller Stand & Roadmap: siehe README („Grenzen & Roadmap") und `eval/RESULTS.md`.
 
 ## Kontext

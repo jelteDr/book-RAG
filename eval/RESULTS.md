@@ -323,17 +323,59 @@ Arme: `dense` (Baseline, contextual + dedup), `link` (Entity-Linking), `expand`
   Einordnung, nicht der Auswahl (kein Dev-Split bei n=32).
 
 **Setup:** Gold v2, n=32 beantwortbar, k=8, Gruppe Horror (Live-Index contextual+dedup),
-paired. Extraktion: 581 Aufrufe, Pilot 8,8 s/Chunk, 0 % JSON-Fehler nach Umstellung auf
-kompaktes JSON (max_tokens 600; Pilot v1 mit 450 schnitt 40 % ab).
+paired. Extraktion: 581 Aufrufe, 0 % JSON-Fehler nach Umstellung auf kompaktes JSON
+(max_tokens 600; Pilot v1 mit 450 schnitt 40 % ab), Ø 6,2 Entities + 4,2 Relationen je
+Chunk. Graph: 446 Knoten (148 PERSON, 181 PLACE), 606 Kanten; 303 kleingeschriebene
+Gattungsbegriffe verworfen, 16 Aliase gemergt, 20 ambig belassen („Mina" ≠ „Mina Harker" —
+bewusst, weil auch „Mina Murray" existiert). Hubs: Dracula (494 Chunks), Harker (338),
+Van Helsing (243).
 
-| Arm | Hit@1 | Hit@8 | MRR | Cov@8 |
-|---|---|---|---|---|
-| dense | 0.31 | 0.81 | 0.474 | — |
-| link | _(Messlauf folgt)_ | | | |
-| expand | | | | |
-| graph_only | | | | |
+| Arm | Hit@1 | Hit@3 | Hit@5 | Hit@8 | MRR | Cov@8 |
+|---|---|---|---|---|---|---|
+| dense (Baseline) | 0.31 | 0.59 | 0.78 | **0.81** | 0.474 | 0.66 |
+| link (α=0.03) | 0.31 | 0.56 | 0.81 | 0.81 | 0.480 | 0.66 |
+| expand (α=0.03) | 0.34 | 0.59 | 0.72 | 0.81 | 0.481 | 0.67 |
+| graph_only (Diagnose) | 0.12 | 0.28 | 0.38 | 0.47 | 0.234 | 0.35 |
 
-**Befund:** _(folgt nach dem Messlauf)_
+Paired vs. dense (Rang des ersten Span-Treffers): **link 4 besser / 3 schlechter / 25 gleich**
+(Vorzeichentest p = 1.0, ΔMRR +0.006); **expand 3 / 4 / 25** (ΔMRR +0.008). Je Fragetyp
+(Hit@8 / MRR): fact n=26 0.92/0.532 → link 0.92/0.542, expand 0.92/0.541; multi n=3
+0.33/0.111 → link 0.33/0.083, expand 0.33/0.111; paraphrase n=3 unverändert 0.33/0.333.
+Sensitivität `link` (post hoc): α=0.02 MRR 0.483 (4/1/27); **α=0.05 Hit@8 0.84, MRR 0.452
+(4/9/19)**; τ=0.40 0.480, τ=0.50 0.467.
+
+![Graph-RAG lokal](../results/graph_experiment.png)
+
+**Befund: kein messbarer Effekt** (vorab definierter Mittelfall — weder Erfolg noch negativ).
+Beide Arme bewegen bei 25 von 32 Fragen nichts, der Rest ist 4:3 bzw. 3:4; ΔMRR liegt weit
+unter der Schwelle +0.03, Hit@8 bleibt exakt gleich. H1 (Hit@8 ↑) ist widerlegt, H2
+(Effekt bei multi/paraphrase) bei n=3 nicht erkennbar.
+
+**Interpretation:**
+1. **Das Graph-Signal ist real, aber schwach — und komplementär.** `graph_only` allein
+   erreicht MRR 0.234 / Hit@8 0.47 (mehr als bge-m3-Sparse in Exp 6: 0.218 / 0.47) und
+   findet zwei dense-MISSes (d01 @4, n09 @2 — das Demeter/Czarina-Catherine-Multi-Item). Die
+   additive Fusion kann sie aber nicht heben: ihr Cosine liegt zu weit unter dem Top-8-Cut.
+   Mit α=0.05 kommen sie rein (Hit@8 0.84), dafür kippt die Präzision (MRR 0.452, 4:9) — der
+   Graph tauscht Precision gegen Recall, netto kein Gewinn.
+2. **Entity-Linking DE→EN funktioniert für Eigennamen** (Demeter 0.66, Mr. Swales 0.72,
+   Bloofer lady 0.56, Renfield 0.60), **ist aber verrauscht bei Orten**: Paddington, Bath,
+   Whitby Castle tauchen mit 0.5–0.6 bei Fragen auf, die nichts damit zu tun haben —
+   181 PLACE-Knoten aus einer 7B-Extraktion sind schlicht zu viel Beifang, und idf dämpft nur
+   Hubs, nicht Rauschen.
+3. **Die contextual-dense-Baseline lässt wenig Luft:** 26 von 32 Items sind Faktfragen, bei
+   denen der Kontext-Präfix (Exp 5) das Pronomen-/Kontextproblem schon löst — genau das, was
+   ein Entity-Graph sonst beisteuern würde.
+
+**Kosten:** Extraktion 581 LLM-Aufrufe ≈ 2,9 h (Pilot 8,8 s/Chunk, Nachtjob unter Systemlast
+17,8 s), Graph-Build + Embeddings ≈ 1 min, Retrieval-Latenz +14 ms je Frage (dense 35 ms →
+link 49 ms, expand 48 ms; Graph lädt in 10 ms). Speicher: graph.json 0,4 MB + Vektoren 1,7 MB.
+
+**Entscheidung:** `GRAPH_RAG_ENABLED` bleibt aus; der lokale Graph-Arm ist kein Hebel für
+Passagen-Retrieval. Nicht gemessen, aber naheliegend als Folge-Idee: das Graph-Signal nicht
+additiv, sondern als **Kandidaten-Generator für den Reranker** nutzen (dense Top-30 ∪ graph
+Top-10 → Cross-Encoder) — Recall-Gewinn ohne den Precision-Tausch. Die eigentliche
+Graph-RAG-Stärke (thematische Fragen) misst Exp 9.
 
 ## Exp 9 — Graph-RAG global: Community-Berichte (`eval/global_graph_experiment.py`)
 
@@ -395,6 +437,7 @@ Hand-Stichprobe ≥ 3 Fragen × alle Arme als Spalte `manual_coverage`).
 4. Bootstrap-CI / paired Test, sobald n≥30.
 5. ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in via
    `RERANKER_ENABLED`, s. README).
-6. Exp 8 — Graph-RAG lokal (Hypothese oben, Messlauf folgt).
+6. ~~Exp 8 — Graph-RAG lokal~~ ✅ gemessen: kein messbarer Effekt (4:3:25 / 3:4:25), Flag
+   bleibt aus; offen: Graph-Signal als Reranker-Kandidatenquelle.
 7. Exp 9 — Graph-RAG global (Hypothese oben; Gold-Set-Entwurf vom Nutzer kuratieren,
    dann `make graph-communities` + `make eval-global`).
