@@ -414,7 +414,11 @@ als 8 oder 16 Einzelpassagen, bei moderat niedrigerer Verankerung im Buchtext.
 - Erwartung Kontroll-Items: global schlechter als dense8.
 
 **Setup:** Gruppe Horror (Live-Index), m=6, 2 Passagen je Bericht, temp 0, n=10 global
-+ 3 Kontrolle; Judge = Antwortmodell (Bias benannt: gleicher Judge für alle Arme,
++ 3 Kontrolle; Louvain **Auflösung 2.0** (vor der Berichtserstellung festgelegt: 1.0 ergab nur
+7 Communities bei Modularität 0.16 mit einem 55-Knoten-Blob um Dracula/Harker/London; 2.0
+ergibt 14 thematisch lesbare Communities — Whitby/Demeter, Sewards Anstalt/Renfield, Lucys
+Krankenzimmer, Verfolgung Varna/Galatz, Transsilvanien-Reise, Carfax; 146 Knoten nach
+Pruning, Modularität 0.11); Judge = Antwortmodell (Bias benannt: gleicher Judge für alle Arme,
 Hand-Stichprobe ≥ 3 Fragen × alle Arme als Spalte `manual_coverage`).
 
 | Arm | Coverage | Cov. Kontrolle | faith_chunks | faith_sources | Ø Aufrufe | Ø e2e |
