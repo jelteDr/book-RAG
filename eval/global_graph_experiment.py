@@ -54,6 +54,7 @@ from answer_eval import generate, is_refusal  # noqa: E402
 RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 ANSWERS_FILE = RESULTS_DIR / "global_graph_answers.jsonl"
 ARMS = ["dense8", "dense16", "global_direct", "global_map"]
+MIN_CONTEXT = 12000  # dense16 ≈ 8-10k Token, global ≈ 9k; Ollama-Default 4096 schneidet still ab
 REFUSAL_TEXT = "Dazu steht in den Quellen nichts."
 CONTROL_IDS = ["d02", "d03", "n09"]
 
@@ -81,6 +82,17 @@ async def judge(ollama: OllamaClient, model: str, question: str, answer: str, po
     except Exception:
         return False
     return out.strip().upper().startswith("JA")
+
+
+async def ensure_context(ollama: OllamaClient, model: str, min_ctx: int) -> None:
+    """Bricht ab, wenn das Modell mit zu kleinem Kontextfenster läuft (sonst ist jede Zahl Müll)."""
+    await ollama.complete([{"role": "user", "content": "OK"}], model, max_tokens=1)  # laden
+    ctx = await ollama.context_length(model)
+    if ctx is None or ctx < min_ctx:
+        sys.exit(f"Ollama läuft {model} mit Kontext {ctx} (< {min_ctx}): Prompts würden still "
+                 "abgeschnitten. Fix: `make ollama-ctx`, dann Ollama-App beenden UND neu öffnen "
+                 "(launchd-Env greift nur bei Neustart über Finder/Dock); prüfen mit `ollama ps`.")
+    print(f"  Kontextfenster {model}: {ctx} Token — ok")
 
 
 def load_gold(args: argparse.Namespace) -> list[dict]:
@@ -168,6 +180,7 @@ async def run(args: argparse.Namespace) -> None:
     rows = load_answers() if args.resume else {}
     RESULTS_DIR.mkdir(exist_ok=True)
     try:
+        await ensure_context(ollama, args.model, MIN_CONTEXT)
         # --- Phase 1: Antworten (teuer) — Checkpoint je (Item, Arm) -------------------
         with ANSWERS_FILE.open("a" if args.resume else "w", encoding="utf-8") as f:
             for item in gold:

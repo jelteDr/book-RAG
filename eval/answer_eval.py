@@ -188,6 +188,14 @@ async def main() -> None:
 
     rows = []
     try:
+        # Kontext-Guard: RAG-Prompts haben ~4-6k Token; Ollama-Default 4096 (2 Slots à 2048)
+        # schneidet still ab und entwertet jede Messung (s. RESULTS.md, Exp 7 Nebenbefund).
+        await ollama.complete([{"role": "user", "content": "OK"}], args.model, max_tokens=1)
+        ctx = await ollama.context_length(args.model)
+        if ctx is None or ctx < 8000:
+            sys.exit(f"Ollama läuft {args.model} mit Kontext {ctx} (< 8000) — `make ollama-ctx` + "
+                     "Ollama-App neu starten, dann erneut.")
+        print(f"Kontextfenster {args.model}: {ctx} Token — ok")
         for item in gold:
             unanswerable = item.get("qtype") == "unanswerable"
             retriever = graph.retrieve if graph is not None else retrieve
