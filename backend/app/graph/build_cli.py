@@ -40,17 +40,20 @@ async def embed_entities(kg: KnowledgeGraph, ollama: OllamaClient, embed_model: 
     kg.entity_vectors = np.asarray(vecs, dtype=np.float32)
 
 
-async def run(group_id: str, extract_path: Path, out_dir: Path, embed: bool) -> None:
+async def run(group_id: str, extract_path: Path, out_dir: Path, embed: bool,
+              keep_common: bool = False) -> None:
     rows = list(load_rows(extract_path).values())
     if not rows:
         print(f"Keine Extraktionen in {extract_path} — erst extract_cli laufen lassen.")
         return
     model = next((r.get("model") for r in rows if r.get("model")), "")
-    kg, report = build_graph(rows, group_id, n_chunks=len(rows), model=model)
+    kg, report = build_graph(rows, group_id, n_chunks=len(rows), model=model,
+                             keep_common_nouns=keep_common)
 
     print(f"Extraktion: {report.n_rows} Chunks ({report.n_error_rows} Fehlerzeilen), "
           f"{report.n_entities_raw} Entity-Nennungen, {report.n_relations_raw} Relationen "
-          f"({report.n_relations_dropped} verworfen: Endpunkt unbekannt/Self-Loop)")
+          f"({report.n_relations_dropped} verworfen: Endpunkt unbekannt/Self-Loop/Gattungsbegriff)")
+    print(f"  {report.n_common_nouns_dropped} Gattungsbegriffe (kleingeschrieben) verworfen")
     st = stats(kg)
     print(f"Graph: {st['n_nodes']} Knoten, {st['n_edges']} Kanten, {st['isolated']} isoliert, "
           f"Chunks mit Entities: {st['chunks_with_entities']}/{len(rows)}")
@@ -82,11 +85,14 @@ def main() -> None:
     ap.add_argument("--extract", help=f"Checkpoint (Default <graph_dir>/<group>/{EXTRACT_FILE})")
     ap.add_argument("--out-dir", help="Zielverzeichnis (Default <graph_dir>/<group>)")
     ap.add_argument("--no-embed", action="store_true", help="keine Entity-Embeddings (nur Struktur)")
+    ap.add_argument("--keep-common-nouns", action="store_true",
+                    help="kleingeschriebene Entities (Gattungsbegriffe) behalten")
     args = ap.parse_args()
     base = Path(settings.graph_dir) / args.group_id
     extract = Path(args.extract) if args.extract else base / EXTRACT_FILE
     out_dir = Path(args.out_dir) if args.out_dir else base
-    asyncio.run(run(args.group_id, extract.resolve(), out_dir.resolve(), not args.no_embed))
+    asyncio.run(run(args.group_id, extract.resolve(), out_dir.resolve(), not args.no_embed,
+                    args.keep_common_nouns))
 
 
 if __name__ == "__main__":

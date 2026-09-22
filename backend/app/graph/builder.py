@@ -8,6 +8,9 @@ Normalisierung ist regelbasiert und konservativ:
     längeren Namen gleichen Typs sind ("Lucy" -> "Lucy Westenra"). "Harker" bleibt
     ein eigener Knoten, weil Jonathan UND Mina Harker existieren (ambig -> Report).
     Orte/Objekte werden nicht gemergt ("London" ist nicht "London Bridge").
+  - Gattungsbegriffe ("inn", "wolves", "train") extrahiert das 7B-Modell trotz Prompt
+    als Entities. Namen ohne Großbuchstaben werden deshalb standardmäßig verworfen
+    (englische Eigennamen sind großgeschrieben; `keep_common_nouns=True` behält sie).
   - Hubs (Dracula in ~40 % der Chunks) werden nicht gekappt, sondern über
     idf = ln(N / n_mentions) im Retrieval gedämpft.
 """
@@ -36,6 +39,7 @@ MAX_REL_EXAMPLES = 5
 
 def normalize_name(name: str) -> str:
     text = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"'s\b", "", text)  # Possessiv: "landlord's wife" != "landlord"
     text = re.sub(r"[^a-z0-9\s]", " ", text.casefold())
     tokens = text.split()
     while tokens and tokens[0] in _TITLES:
@@ -86,12 +90,14 @@ class BuildReport:
     n_entities_raw: int = 0
     n_relations_raw: int = 0
     n_relations_dropped: int = 0  # Endpunkt nicht auflösbar / Self-Loop
+    n_common_nouns_dropped: int = 0  # Entities ohne Großbuchstaben (Gattungsbegriffe)
     merges: list[tuple[str, str]] = field(default_factory=list)
     ambiguous: list[tuple[str, list[str]]] = field(default_factory=list)
 
 
 def build_graph(
-    rows: list[dict], group_id: str, n_chunks: int, model: str = ""
+    rows: list[dict], group_id: str, n_chunks: int, model: str = "",
+    *, keep_common_nouns: bool = False,
 ) -> tuple[KnowledgeGraph, BuildReport]:
     report = BuildReport(n_rows=len(rows))
     nodes: dict[str, dict] = {}
@@ -132,6 +138,17 @@ def build_graph(
             edge["chunks"].add(chunk_key)
             if len(edge["rels"]) < MAX_REL_EXAMPLES:
                 edge["rels"].append({"rel": rel.get("rel", ""), "chunk": chunk_key})
+
+    # Gattungsbegriffe verwerfen (häufigste Oberflächenform ohne Großbuchstaben).
+    if not keep_common_nouns:
+        common = [k for k, d in nodes.items()
+                  if not any(ch.isupper() for ch in d["surface"].most_common(1)[0][0])]
+        for k in common:
+            nodes.pop(k)
+        report.n_common_nouns_dropped = len(common)
+        dropped_edges = [e for e in edges if e[0] in common or e[1] in common]
+        for e in dropped_edges:
+            report.n_relations_dropped += len(edges.pop(e)["chunks"])
 
     # Alias-Merge anwenden.
     mapping, report.ambiguous = merge_aliases(sorted(nodes))

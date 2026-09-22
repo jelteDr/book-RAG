@@ -73,6 +73,7 @@ def test_normalize_name_strips_titles_and_accents():
     assert normalize_name("Dr. John Seward") == "john seward"
     assert normalize_name("Van Helsing") == "van helsing"  # 'van' ist kein Titel
     assert normalize_name("Bistriţa") == "bistrita"
+    assert normalize_name("Landlord's wife") == "landlord wife"  # kein Prefix-Merge mit "landlord"
     assert entity_key("The Count", "PERSON") == "PERSON:"  # nur Titel -> leer (wird verworfen)
 
 
@@ -108,15 +109,16 @@ def _rows() -> list[dict]:
          "relations": [rel("Dracula", "Lucy")]},
         {"key": f"{BOOK}:2", "book_id": BOOK, "entities": [ent("Dracula"), ent("Whitby", "PLACE")],
          "relations": [rel("Dracula", "Whitby", "arrives")]},
-        {"key": f"{BOOK}:3", "book_id": BOOK, "entities": [ent("Dracula")], "relations": [],
-         "error": None},
+        {"key": f"{BOOK}:3", "book_id": BOOK, "entities": [ent("Dracula"), ent("wolves", "OBJECT")],
+         "relations": [rel("Dracula", "wolves", "commands")], "error": None},
     ]
 
 
 def test_build_graph_merges_aliases_and_computes_idf_and_weights():
     kg, report = build_graph(_rows(), "Horror", n_chunks=4)
     ids = set(kg.graph.nodes)
-    assert ids == {"PERSON:dracula", "PERSON:lucy westenra", "PLACE:whitby"}
+    assert ids == {"PERSON:dracula", "PERSON:lucy westenra", "PLACE:whitby"}  # 'wolves' weg
+    assert report.n_common_nouns_dropped == 1
     assert report.merges == [("PERSON:lucy", "PERSON:lucy westenra")]
     assert kg.mentions["PERSON:dracula"] == [f"{BOOK}:0", f"{BOOK}:1", f"{BOOK}:2", f"{BOOK}:3"]
     assert kg.idf("PERSON:dracula") == 0.0  # Hub: in allen Chunks -> ln(4/4)
