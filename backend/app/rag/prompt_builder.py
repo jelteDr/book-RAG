@@ -23,8 +23,15 @@ _MAX_HISTORY_TURNS = 4  # begrenztes Fenster: nur die letzten Turns für Kohäre
 
 
 def build_messages(
-    question: str, points: list[models.ScoredPoint], history: list[dict] | None = None
+    question: str,
+    points: list[models.ScoredPoint],
+    history: list[dict] | None = None,
+    *,
+    system_extra: str | None = None,
+    hint: str | None = None,
 ) -> list[dict]:
+    """`system_extra` hängt Regeln an den Contract an (globaler Graph-Pfad), `hint` ist ein
+    optionaler Block vor der Frage (z. B. Map-Step-Kernaussagen) — die Quellen bleiben gleich."""
     # Nur die Nummer [i] als Präfix — Metadaten bleiben serverseitig, damit das
     # Modell keine "Buch:/Kapitel:"-Header in die Antwort kopiert.
     blocks = [
@@ -33,7 +40,7 @@ def build_messages(
     ]
     context = "\n\n".join(blocks)
 
-    messages: list[dict] = [{"role": "system", "content": _SYSTEM}]
+    messages: list[dict] = [{"role": "system", "content": _SYSTEM + (system_extra or "")}]
 
     # Begrenzter Verlauf für Folgefragen; alte [n]-Marker aus Assistenten-Antworten
     # entfernen, damit sie nicht mit den frischen Quellen kollidieren.
@@ -48,7 +55,8 @@ def build_messages(
             "role": "user",
             "content": (
                 f"Quellen:\n{context}\n\n"
-                f"Frage: {question}\n\n"
+                + (f"{hint}\n\n" if hint else "")
+                + f"Frage: {question}\n\n"
                 "Antworte auf Deutsch in eigenen Worten und setze hinter jede Aussage die "
                 "Nummer der genutzten Quelle in eckigen Klammern, z. B. [2]."
             ),

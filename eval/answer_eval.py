@@ -170,8 +170,9 @@ async def main() -> None:
     args = ap.parse_args()
     graph = None
     if args.graph != "off":
-        graph = GraphService(args.graph_dir, True, args.graph, alpha=settings.graph_alpha,
-                             top_m=settings.graph_top_m, min_sim=settings.graph_min_sim)
+        graph = GraphService(args.graph_dir, True, "local", local_mode=args.graph,
+                             alpha=settings.graph_alpha, top_m=settings.graph_top_m,
+                             min_sim=settings.graph_min_sim)
         if not graph.active:
             sys.exit(f"Kein Graph unter {args.graph_dir} — erst make graph + make graph-build.")
 

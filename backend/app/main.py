@@ -27,7 +27,10 @@ async def lifespan(app: FastAPI):
     )
     app.state.graph = GraphService(
         settings.graph_dir, settings.graph_rag_enabled, settings.graph_rag_mode,
-        alpha=settings.graph_alpha, top_m=settings.graph_top_m, min_sim=settings.graph_min_sim,
+        local_mode=settings.graph_local_mode, alpha=settings.graph_alpha,
+        top_m=settings.graph_top_m, min_sim=settings.graph_min_sim,
+        global_m=settings.graph_global_m, global_map=settings.graph_global_map,
+        chunks_per_community=settings.graph_global_chunks_per_community,
     )
     app.state.rag = RagService(
         app.state.ollama, app.state.vectors, settings, session_factory,

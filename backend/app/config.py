@@ -46,11 +46,15 @@ class Settings(BaseSettings):
     # `<graph_dir>/<group>/` (make graph + make graph-build). Dense bleibt Träger:
     # score = cos + alpha * graph_signal — bei alpha=0 identisch zur Baseline.
     graph_rag_enabled: bool = False
-    graph_rag_mode: str = "link"  # link (Entity-Linking) | expand (Nachbar-Expansion)
+    graph_rag_mode: str = "local"  # local | global (Community-Berichte, Exp 9) | auto (Router)
+    graph_local_mode: str = "link"  # link (Entity-Linking) | expand (Nachbar-Expansion)
     graph_dir: str = "../data/graph"  # im Container: /data/graph (Volume ./data)
     graph_alpha: float = 0.03  # Gewicht des Graph-Signals in der Fusion
     graph_top_m: int = 5  # so viele Entities werden pro Frage verlinkt
     graph_min_sim: float = 0.45  # Mindest-Cosine Frage<->Entity fürs Linking
+    graph_global_m: int = 6  # so viele Community-Berichte werden pro globaler Frage vorausgewählt
+    graph_global_map: bool = False  # Map-Step (ein LLM-Aufruf je Bericht) vor der Antwort
+    graph_global_chunks_per_community: int = 2  # Originalpassagen je Bericht als Zitatquellen
 
     # Faithfulness-Check (optional, opt-in; markiert ungestützte Zitate via NLI).
     # Braucht ebenfalls die reranker-Dependency-Gruppe (torch/transformers).

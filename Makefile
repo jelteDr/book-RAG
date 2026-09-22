@@ -6,7 +6,7 @@ BACKEND_PORT  ?= 8001
 
 .DEFAULT_GOAL := help
 .PHONY: help up up-ml down restart clean setup models ollama-host ollama-ctx ingest eval logs ps \
-	graph graph-build eval-graph
+	graph graph-build eval-graph graph-communities eval-global
 
 help: ## Diese Übersicht anzeigen
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -75,6 +75,14 @@ graph-build: ## Graph-RAG: Graph + Entity-Embeddings aus der Extraktion bauen
 eval-graph: ## Exp 8: Graph-Arme vs. dense auf dem Span-Gold-Set (paired)
 	cd backend && uv run --with matplotlib python ../eval/graph_experiment.py \
 		--gold ../eval/gold_v2.jsonl --group "$(GROUP)" --k 8
+
+graph-communities: ## Exp 9: Louvain-Communities + LLM-Berichte + Embeddings (Gruppe $(GROUP))
+	cd backend && uv run python -m app.graph.communities_cli --group "$(GROUP)" --summarize --embed
+
+eval-global: ## Exp 9: globaler Graph-Pfad vs. dense auf den thematischen Gold-Fragen (Judge + NLI)
+	cd backend && uv run --with rouge-score --with transformers --with torch --with sentencepiece \
+		--with protobuf --with matplotlib python ../eval/global_graph_experiment.py \
+		--gold ../eval/gold_global.jsonl --group "$(GROUP)" --m 6 --control 3
 
 logs: ## Container-Logs folgen
 	docker compose logs -f

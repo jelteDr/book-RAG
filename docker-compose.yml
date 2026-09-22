@@ -48,7 +48,10 @@ services:
       - S2B_TOP_N=${S2B_TOP_N:-3}
       # Opt-in Graph-RAG (Exp 8): Graph liegt im ./data-Volume unter /data/graph/<Gruppe>/.
       - GRAPH_RAG_ENABLED=${GRAPH_RAG_ENABLED:-false}
-      - GRAPH_RAG_MODE=${GRAPH_RAG_MODE:-link}
+      - GRAPH_RAG_MODE=${GRAPH_RAG_MODE:-local}
+      - GRAPH_LOCAL_MODE=${GRAPH_LOCAL_MODE:-link}
+      - GRAPH_GLOBAL_M=${GRAPH_GLOBAL_M:-6}
+      - GRAPH_GLOBAL_MAP=${GRAPH_GLOBAL_MAP:-false}
       - GRAPH_ALPHA=${GRAPH_ALPHA:-0.03}
       - GRAPH_TOP_M=${GRAPH_TOP_M:-5}
       - GRAPH_MIN_SIM=${GRAPH_MIN_SIM:-0.45}

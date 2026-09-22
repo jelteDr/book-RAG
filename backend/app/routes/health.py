@@ -22,5 +22,5 @@ async def health(request: Request) -> dict:
         "qdrant": qdrant_ok,
         "reranker": request.app.state.reranker.active,
         "faithfulness": request.app.state.faithfulness.active,
-        "graph": request.app.state.graph.active,
+        "graph": request.app.state.graph.status(),
     }
