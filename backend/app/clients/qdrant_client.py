@@ -85,18 +85,20 @@ class VectorStore:
         return result.points
 
     async def get_by_indices(
-        self, book_id: str, chunk_indices: Sequence[int]
+        self, book_id: str, chunk_indices: Sequence[int], with_vectors: bool = False
     ) -> list[models.Record]:
         """Chunks eines Buchs direkt über ihre deterministischen IDs holen.
 
         Fehlende Indizes (z. B. vor dem Buchanfang / nach dem Ende) fallen
-        einfach aus dem Ergebnis — kein Fehler.
+        einfach aus dem Ergebnis — kein Fehler. `with_vectors=True` liefert die
+        gespeicherten (L2-normalisierten) Vektoren mit, z. B. für die Score-Fusion
+        im Graph-Retrieval.
         """
         ids = [
             str(uuid.uuid5(_ID_NAMESPACE, f"{book_id}:{i}")) for i in chunk_indices
         ]
         return await self._client.retrieve(
-            collection_name=self._collection, ids=ids, with_payload=True
+            collection_name=self._collection, ids=ids, with_payload=True, with_vectors=with_vectors
         )
 
     async def scroll_all(
