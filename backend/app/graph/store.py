@@ -78,6 +78,10 @@ class KnowledgeGraph:
                 ids=np.array(self.entity_ids, dtype=object),
                 vectors=self.entity_vectors.astype(np.float32),
             )
+        elif (directory / VECTORS_FILE).exists():
+            # Kein Vektor-Set mitgegeben (--no-embed): alte Vektoren passen nicht mehr zu den
+            # Knoten -> löschen, sonst würde das Linking auf falsche Entities zeigen.
+            (directory / VECTORS_FILE).unlink()
 
     @classmethod
     def load(cls, directory: Path) -> KnowledgeGraph:
