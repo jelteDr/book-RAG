@@ -111,6 +111,14 @@ def load_gold(args: argparse.Namespace) -> list[dict]:
     return gold
 
 
+def save_answers(rows: dict[tuple[str, str], dict]) -> None:
+    """Checkpoint komplett neu schreiben — auch Judge-/NLI-Felder werden so resumierbar."""
+    tmp = ANSWERS_FILE.with_suffix(".tmp")
+    tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows.values()),
+                   encoding="utf-8")
+    tmp.replace(ANSWERS_FILE)
+
+
 def load_answers() -> dict[tuple[str, str], dict]:
     rows: dict[tuple[str, str], dict] = {}
     if ANSWERS_FILE.exists():
@@ -197,15 +205,20 @@ async def run(args: argparse.Namespace) -> None:
                           f"{'  VERWEIGERT' if row['refused'] else ''}")
 
         # --- Phase 2: Judge (blind, gemischte Reihenfolge) + Kalibrierung ------------
-        tasks = [(item, arm) for item in gold for arm in arms]
+        tasks = [(item, arm) for item in gold for arm in arms
+                 if "coverage" not in rows[(item["id"], arm)]]
         random.Random(args.seed).shuffle(tasks)
-        print(f"Judge ({args.judge_model}): {len(tasks)} Antworten …")
-        for item, arm in tasks:
+        print(f"Judge ({args.judge_model}): {len(tasks)} Antworten zu bewerten "
+              f"({len(gold) * len(arms) - len(tasks)} aus Checkpoint) …")
+        for n, (item, arm) in enumerate(tasks, start=1):
             row = rows[(item["id"], arm)]
             verdicts = [await judge(ollama, args.judge_model, item["question"], row["answer"], p)
                         for p in item["rubric"]]
             row["per_point"] = verdicts
             row["coverage"] = sum(verdicts) / len(verdicts)
+            save_answers(rows)
+            if n % 10 == 0 or n == len(tasks):
+                print(f"  {n}/{len(tasks)} bewertet")
         calibration = {"refusal": [], "rubric": []}
         for item in gold:
             low = [await judge(ollama, args.judge_model, item["question"], REFUSAL_TEXT, p)
@@ -225,15 +238,21 @@ async def run(args: argparse.Namespace) -> None:
     if not args.no_nli:
         from answer_eval import Faithfulness  # torch/transformers erst hier
 
-        print("NLI-Modell laden …")
+        todo = [r for r in rows.values() if "faith_sources" not in r]
+        print(f"NLI-Modell laden … ({len(todo)} Antworten zu prüfen, "
+              f"{len(rows) - len(todo)} aus Checkpoint; ~1 s je Satz×Passage auf CPU)")
         faith = Faithfulness()
-        for row in rows.values():
+        for n, row in enumerate(todo, start=1):
             if row["refused"]:
                 row["faith_chunks"] = row["faith_sources"] = None
-                continue
-            chunks = [s["text"] for s in row["sources"] if s["kind"] == "chunk"]
-            row["faith_chunks"] = faith.score(row["answer"], chunks) if chunks else None
-            row["faith_sources"] = faith.score(row["answer"], [s["text"] for s in row["sources"]])
+            else:
+                chunks = [s["text"] for s in row["sources"] if s["kind"] == "chunk"]
+                row["faith_chunks"] = faith.score(row["answer"], chunks) if chunks else None
+                row["faith_sources"] = faith.score(row["answer"],
+                                                   [s["text"] for s in row["sources"]])
+            save_answers(rows)
+            print(f"  NLI {n}/{len(todo)}  {row['id']} {row['arm']:<13} "
+                  f"faith_chunks={fmt(row['faith_chunks'])} faith_sources={fmt(row['faith_sources'])}")
     else:
         for row in rows.values():
             row["faith_chunks"] = row["faith_sources"] = None
