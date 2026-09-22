@@ -38,6 +38,7 @@ class RagService:
         session_factory=None,
         reranker=None,
         faithfulness=None,
+        graph=None,
     ) -> None:
         self._ollama = ollama
         self._vectors = vectors
@@ -45,6 +46,7 @@ class RagService:
         self._session_factory = session_factory
         self._reranker = reranker
         self._faithfulness = faithfulness
+        self._graph = graph  # GraphService (opt-in, Exp 8) oder None
 
     async def answer(
         self, question: str, *, model: str | None = None, group_id: str | None = None,
@@ -75,11 +77,21 @@ class RagService:
         rerank = self._reranker is not None and self._reranker.active
         fetch_k = self._settings.rerank_candidates if rerank else top_k
         try:
-            points = await retrieve(
-                retrieval_query, ollama=self._ollama, vectors=self._vectors,
-                embed_model=self._settings.embed_model, top_k=fetch_k,
-                group_ids=await self._resolve_group_ids(group_id),
-            )
+            group_ids = await self._resolve_group_ids(group_id)
+            if self._graph is not None and self._graph.active:
+                # Graph-RAG (Exp 8): Kandidaten + dense-erhaltende Fusion. Reihenfolge
+                # bleibt Graph -> Reranker -> Small-to-Big.
+                points = await self._graph.retrieve(
+                    retrieval_query, ollama=self._ollama, vectors=self._vectors,
+                    embed_model=self._settings.embed_model, top_k=fetch_k,
+                    group_ids=group_ids,
+                )
+            else:
+                points = await retrieve(
+                    retrieval_query, ollama=self._ollama, vectors=self._vectors,
+                    embed_model=self._settings.embed_model, top_k=fetch_k,
+                    group_ids=group_ids,
+                )
         except Exception as exc:  # Ollama/Qdrant nicht erreichbar
             yield "error", {"message": f"Retrieval fehlgeschlagen: {exc}"}
             return

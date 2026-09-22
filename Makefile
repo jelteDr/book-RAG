@@ -5,7 +5,8 @@ FRONTEND_PORT ?= 4200
 BACKEND_PORT  ?= 8001
 
 .DEFAULT_GOAL := help
-.PHONY: help up up-ml down restart clean setup models ollama-host ollama-ctx ingest eval logs ps
+.PHONY: help up up-ml down restart clean setup models ollama-host ollama-ctx ingest eval logs ps \
+	graph graph-build eval-graph
 
 help: ## Diese Übersicht anzeigen
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -63,6 +64,17 @@ ingest: ## Demo-Buch Dracula ingesten (Gruppe $(GROUP))
 eval: ## Retrieval-Evaluation gegen das Gold-Set (Recall@k, MRR)
 	cd backend && uv run python ../eval/retrieval_eval.py \
 		--gold ../eval/gold_dracula.jsonl --group "$(GROUP)" --k 8
+
+# Graph-RAG (Exp 8): Extraktion (~9 s/Chunk, Dracula ≈ 1,5 h, resumierbar) -> Graph-Build -> Eval.
+graph: ## Graph-RAG: Entities/Relationen je Chunk extrahieren (Gruppe $(GROUP); Nachtjob)
+	cd backend && uv run python -m app.graph.extract_cli --group "$(GROUP)"
+
+graph-build: ## Graph-RAG: Graph + Entity-Embeddings aus der Extraktion bauen
+	cd backend && uv run python -m app.graph.build_cli --group "$(GROUP)"
+
+eval-graph: ## Exp 8: Graph-Arme vs. dense auf dem Span-Gold-Set (paired)
+	cd backend && uv run --with matplotlib python ../eval/graph_experiment.py \
+		--gold ../eval/gold_v2.jsonl --group "$(GROUP)" --k 8
 
 logs: ## Container-Logs folgen
 	docker compose logs -f
