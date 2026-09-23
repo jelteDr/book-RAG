@@ -131,16 +131,21 @@ class Faithfulness:
         self.tok = AutoTokenizer.from_pretrained(NLI_MODEL)
         self.model = AutoModelForSequenceClassification.from_pretrained(NLI_MODEL)
         self.model.eval()
+        # Apple-GPU (MPS) statt CPU: die NLI-Phase war auf CPU der laengste Teil (~1 s je
+        # Satz x Passage); auf MPS um ein Vielfaches schneller, Ergebnisse identisch (float32).
+        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        self.model.to(self.device)
         self.ent_idx = next(
             i for i, lab in self.model.config.id2label.items() if lab.lower().startswith("entail")
         )
 
     def _entail_prob(self, premise: str, hypothesis: str) -> float:
         inputs = self.tok(premise, hypothesis, truncation=True, max_length=512, return_tensors="pt")
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
         with self.torch.no_grad():
             logits = self.model(**inputs).logits
         probs = self.torch.softmax(logits, dim=-1)[0]
-        return float(probs[self.ent_idx])
+        return float(probs[self.ent_idx].cpu())
 
     def score(self, answer: str, chunks: list[str], threshold: float = 0.5) -> float:
         sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", answer) if len(s.strip()) > 15]
@@ -167,6 +172,7 @@ async def main() -> None:
     ap.add_argument("--graph", choices=["off", "link", "expand"], default="off",
                     help="Graph-RAG-Arm (Exp 8) statt dense Retrieval; Graph aus --graph-dir")
     ap.add_argument("--graph-dir", default=settings.graph_dir)
+    ap.add_argument("--out", help="Ergebnis-JSON (Default results/answer_eval.json)")
     args = ap.parse_args()
     graph = None
     if args.graph != "off":
@@ -284,7 +290,7 @@ async def main() -> None:
     print(f"    TPS median:          {median(rows, 'tps'):.1f} tok/s")
     print(f"    e2e median:          {median(rows, 'e2e_ms'):.0f} ms")
 
-    out = Path(__file__).resolve().parent.parent / "results" / "answer_eval.json"
+    out = Path(args.out) if args.out else Path(__file__).resolve().parent.parent / "results" / "answer_eval.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(
         {"model": args.model, "k": args.k, "s2b": args.s2b, "graph": args.graph, "rows": rows},
