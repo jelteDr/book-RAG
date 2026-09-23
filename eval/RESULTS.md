@@ -421,14 +421,67 @@ Krankenzimmer, Verfolgung Varna/Galatz, Transsilvanien-Reise, Carfax; 146 Knoten
 Pruning, Modularität 0.11); Judge = Antwortmodell (Bias benannt: gleicher Judge für alle Arme,
 Hand-Stichprobe ≥ 3 Fragen × alle Arme als Spalte `manual_coverage`).
 
-| Arm | Coverage | Cov. Kontrolle | faith_chunks | faith_sources | Ø Aufrufe | Ø e2e |
-|---|---|---|---|---|---|---|
-| dense8 | _(Messlauf folgt)_ | | | | 1 | |
-| dense16 | | | | | 1 | |
-| global_direct | | | | | 1 | |
-| global_map | | | | | m+1 | |
+Messlauf 2026-09-23 (nach Ollama-Neustart mit `num_ctx` 16384 — ein erster Lauf mit 4096
+schnitt **alle** 52 Prompts still auf 2050 Token ab und wurde verworfen; die Eval-Skripte prüfen
+das Kontextfenster seitdem vorab). Judge-Kalibrierung: Verweigerung → 2 %, Rubrik als Antwort
+→ 94 % (im Band, Ergebnis interpretierbar). Rubriken = **unkuratierter Entwurf** aus Buchwissen.
 
-**Befund:** _(folgt nach dem Messlauf)_
+| Arm | Coverage (n=10) | Cov. Kontrolle (n=3) | faith_chunks | faith_sources | Zitatquote | Ø Aufrufe | Ø e2e |
+|---|---|---|---|---|---|---|---|
+| dense8 | 0.14 | **0.67** | **0.68** | 0.68 | **0.81** | 1 | **42 s** |
+| dense16 | **0.16** | 0.67 | 0.47 | 0.47 | 0.78 | 1 | 58 s |
+| global_direct | 0.04 | 0.00 (verweigert) | 0.56 | 0.86 | 0.47 | 1 | 81 s |
+| global_map | 0.14 | 0.33 | 0.53 | 0.81 | 0.48 | 7 | 71 s |
+
+Paired Coverage vs. dense16: **global_direct 1 besser / 4 schlechter / 5 gleich**,
+**global_map 1 / 2 / 7**. Je Frage liegen alle vier Arme zwischen 0.0 und 0.6; bei g01, g09,
+g10 trifft kein Arm einen einzigen Kernpunkt.
+
+![Graph-RAG global](../results/global_graph_experiment.png)
+
+**Befund: NEGATIV** (Vorab-Kriterium „Coverage ≤ dense16" erfüllt, für beide globalen Arme).
+Community-Berichte machen die Antworten auf thematische Fragen nicht besser, nur länger,
+langsamer und schlechter zitiert.
+
+**Interpretation:**
+1. **Bodeneffekt bei allen Armen.** Coverage 0.04–0.16 heißt: die Rubriken (Kernpunkte aus
+   dem Wissen über den ganzen Roman) liegen weit über dem, was qwen2.5:7b aus 8–16 Passagen
+   **oder** aus 14 Berichten erzeugt. Beispiel g03 (Dokumente als Erzählmittel): dense16 trifft
+   3/5, global_direct 0/5 — obwohl beide inhaltlich Ähnliches sagen; der strikte JA/NEIN-Judge
+   („ausdrücklich") hat bei so allgemeinen Antworten wenig Auflösung. Bei n=10 sind damit auch
+   die Differenzen zwischen den dense-Armen nicht belastbar. Der Vergleich ist trotzdem
+   entscheidbar: global gewinnt an keiner Stelle systematisch.
+2. **Die Berichte sind das Problem, nicht der Suchpfad.** Der Graph ist ein Ko-Okkurrenz-Graph
+   aus einer 7B-Extraktion; die Louvain-Communities sind Entity-Cluster, keine Themen. 5 von 14
+   Berichten heißen wörtlich „Entities and Relationships in Dracula", der Inhalt ist eine
+   Wer-mit-wem-Aufzählung. `faith_sources` 0.86 vs. `faith_chunks` 0.56 zeigt, worauf sich die
+   globalen Antworten stützen: auf die Berichte, nicht auf den Buchtext. Die Halluzinations-
+   prüfung wandert damit in die Berichtsstufe — und die ist ungeprüft (Smoke-Test: ein Bericht
+   ließ Dr. Seward nach Whitby reisen).
+3. **7B-Degeneration bei langem, gemischtsprachigem Kontext.** g01/global_direct kippt bei
+   ~8,9k Token (englische Berichte, deutsche Frage) mitten im Satz ins Chinesische und erfindet
+   die Figur „Márius Trótski"; 1 von 26 globalen Antworten, 0 von 26 dense. Der große Kontext
+   ist für dieses Modell selbst ein Risiko, nicht nur ein Kostenfaktor.
+4. **Nebenbefund dense16 vs. dense8:** +0.02 Coverage, aber `faith_chunks` 0.68 → 0.47 und
+   e2e +16 s. Mehr Passagen verschlechtern die Verankerung deutlich — k=8 bleibt richtig, auch
+   für breite Fragen.
+5. **Kontroll-Items wie vorhergesagt:** global_direct verweigert Faktfragen ehrlich (Coverage 0,
+   keine Halluzination), dense 0.67. global_map löst als **einziger** Arm n09 (Demeter →
+   Czarina Catherine, das Multi-Hop-Item, das auch in Exp 8 nur `graph_only` fand) — anekdotisch,
+   aber genau der Fragetyp, für den Communities gedacht sind.
+
+**Kosten:** Berichte 14 LLM-Aufrufe ≈ 15 min; Antwort e2e 81 s (direct) bzw. 71 s (map, 7
+Aufrufe) statt 42 s; Zitatquote fällt von 0.81 auf 0.47. Eval-Lauf gesamt ≈ 2,5 h (50 min
+Antworten, 10 min Judge, ~1,5 h NLI auf CPU).
+
+**Entscheidung:** Kein globaler Pfad im Produkt; `GRAPH_RAG_MODE` bleibt `local`, das Flag
+bleibt aus. Der Code bleibt als opt-in (`mode=global` im Chat-Request) für Demos erhalten.
+Was es für einen zweiten Versuch bräuchte, in dieser Reihenfolge: (a) Berichte, die Themen
+statt Entity-Listen beschreiben — d. h. eine Extraktion mit Relations-Beschreibungen und ein
+größeres Modell dafür; (b) Berichte per NLI gegen die repräsentativen Passagen prüfen, bevor
+sie Quellen werden; (c) ein größeres Antwortmodell oder kürzere Kontexte (kein 9k-Token-Prompt
+für ein 7B); (d) kuratierte Rubriken mit Kernpunkten, die aus dem Text belegbar sind, und ein
+Judge mit Skala statt JA/NEIN.
 
 ## Nächste Schritte
 
@@ -443,5 +496,7 @@ Hand-Stichprobe ≥ 3 Fragen × alle Arme als Spalte `manual_coverage`).
    `RERANKER_ENABLED`, s. README).
 6. ~~Exp 8 — Graph-RAG lokal~~ ✅ gemessen: kein messbarer Effekt (4:3:25 / 3:4:25), Flag
    bleibt aus; offen: Graph-Signal als Reranker-Kandidatenquelle.
-7. Exp 9 — Graph-RAG global (Hypothese oben; Gold-Set-Entwurf vom Nutzer kuratieren,
-   dann `make graph-communities` + `make eval-global`).
+7. ~~Exp 9 — Graph-RAG global~~ ✅ gemessen: negativ (Coverage 0.04/0.14 vs. dense16 0.16,
+   Berichte zu flach, 7B degeneriert bei 9k Token); kein globaler Pfad im Produkt.
+8. Nebenbefund aus Exp 9 nachmessen: k=16 senkt faith_chunks 0.68 → 0.47 — lohnt ein
+   k-Sweep auf der Metrik-Suite (k ∈ {4, 6, 8, 12}).

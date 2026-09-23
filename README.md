@@ -183,9 +183,12 @@ Git Flow: `main` (stabil) ← `develop` (Integration) ← `feature/*`. Commits a
 - ~~Small-to-Big~~ ✅ gemessen (Exp 7, MRR 0.474→0.540), opt-in `SMALL_TO_BIG_ENABLED`.
 - **Graph-RAG** (`backend/app/graph/`, opt-in `GRAPH_RAG_ENABLED`): Entity-Graph aus einer
   LLM-Extraktion je Chunk. **Exp 8 (lokal, Entity-Linking / Nachbar-Expansion): kein messbarer
-  Effekt** auf der Span-Metrik (paired 4:3:25) — Flag bleibt aus. **Exp 9 (global,
-  Community-Berichte für thematische Fragen, eigenes Gold-Set + LLM-Judge): offen.**
-  Details, Hypothesen vorab und Zahlen in `eval/RESULTS.md`.
+  Effekt** auf der Span-Metrik (paired 4:3:25). **Exp 9 (global, Louvain-Communities +
+  LLM-Berichte für thematische Fragen, eigenes Gold-Set + LLM-Judge + NLI): negativ** —
+  Berichte aus einer 7B-Extraktion sind Entity-Listen statt Themen, die Antworten werden
+  länger und schlechter zitiert, nicht besser; ein 7B degeneriert bei 9k-Token-Prompts.
+  Beides bleibt opt-in im Code, das Flag bleibt aus. Hypothesen vorab, Zahlen und Interpretation
+  in `eval/RESULTS.md`.
 - Bewusst minimal (lokales Projekt): kein Auth/CORS/Rate-Limiting.
 - ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in, s. o.).
 - ~~Ingestion-UI, Gruppen-Verwaltung, Modellwechsel-UI~~ ✅ umgesetzt.
