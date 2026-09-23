@@ -14,6 +14,8 @@ dependencies = [
     "sqlmodel>=0.0.22",           # ORM (SQLAlchemy 2.0 + Pydantic) für PostgreSQL
     "asyncpg>=0.30",              # async PostgreSQL-Treiber
     "greenlet>=3.0",             # von SQLAlchemy-async benötigt
+    "networkx>=3.3",             # Graph-RAG (Exp 8): Entity-Graph, Communities
+    "numpy>=1.26",               # Graph-RAG: Entity-Vektoren (Cosine per Matrixprodukt)
 ]
 
 [dependency-groups]

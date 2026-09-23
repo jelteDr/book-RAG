@@ -43,6 +43,30 @@ def dedup_overlaps(
     return kept
 
 
+def build_group_filter(
+    group_id: str | None = None, group_ids: list[str] | None = None
+) -> models.Filter | None:
+    """Qdrant-Filter auf `group_id`; `group_ids` (Sammelgruppe) hat Vorrang vor `group_id`.
+
+    Als eigene Funktion, damit JEDER Suchpfad (App, Graph-Arm, Eval-Skripte) denselben
+    Filter baut — in Exp 2 und Exp 6 fehlte er im dense-Arm des Evals unbemerkt.
+    """
+    if group_ids:
+        return models.Filter(
+            must=[models.FieldCondition(key="group_id", match=models.MatchAny(any=group_ids))]
+        )
+    if group_id:
+        return models.Filter(
+            must=[models.FieldCondition(key="group_id", match=models.MatchValue(value=group_id))]
+        )
+    return None
+
+
+async def embed_question(question: str, *, ollama: OllamaClient, embed_model: str) -> list[float]:
+    """Frage einbetten (L2-normalisiert, wie die Chunk-Vektoren beim Ingest)."""
+    return l2_normalize((await ollama.embed([question], embed_model))[0])
+
+
 async def retrieve(
     question: str,
     *,
@@ -54,18 +78,8 @@ async def retrieve(
     group_ids: list[str] | None = None,
 ) -> list[models.ScoredPoint]:
     """`group_ids` (z. B. aus einer Sammelgruppe expandiert) hat Vorrang vor `group_id`."""
-    query_emb = (await ollama.embed([question], embed_model))[0]
-    query_vec = l2_normalize(query_emb)
-
-    query_filter = None
-    if group_ids:
-        query_filter = models.Filter(
-            must=[models.FieldCondition(key="group_id", match=models.MatchAny(any=group_ids))]
-        )
-    elif group_id:
-        query_filter = models.Filter(
-            must=[models.FieldCondition(key="group_id", match=models.MatchValue(value=group_id))]
-        )
+    query_vec = await embed_question(question, ollama=ollama, embed_model=embed_model)
+    query_filter = build_group_filter(group_id, group_ids)
 
     # Puffer holen und überlappende Passagen deduplizieren (siehe Modul-Docstring).
     points = await vectors.search(query_vec, top_k + DEDUP_EXTRA, query_filter)

@@ -20,6 +20,8 @@ from sqlmodel import col, select
 
 from app.db.models import ChatMessage, Collection, CollectionMember, Conversation, Group, QueryLog
 from app.rag.citations import extract_citations, sources_overview
+from app.graph.global_search import GLOBAL_SYSTEM_EXTRA
+from app.graph.router import decide_mode
 from app.rag.expander import expand_points
 from app.rag.prompt_builder import build_messages
 from app.rag.retriever import retrieve
@@ -38,6 +40,7 @@ class RagService:
         session_factory=None,
         reranker=None,
         faithfulness=None,
+        graph=None,
     ) -> None:
         self._ollama = ollama
         self._vectors = vectors
@@ -45,12 +48,17 @@ class RagService:
         self._session_factory = session_factory
         self._reranker = reranker
         self._faithfulness = faithfulness
+        self._graph = graph  # GraphService (opt-in, Exp 8) oder None
 
     async def answer(
         self, question: str, *, model: str | None = None, group_id: str | None = None,
-        top_k: int | None = None, conversation_id: int | None = None,
+        top_k: int | None = None, conversation_id: int | None = None, mode: str | None = None,
     ) -> AsyncIterator[Event]:
-        """Liefert nacheinander ('token'|'done'|'error', payload)-Events."""
+        """Liefert nacheinander ('token'|'done'|'error', payload)-Events.
+
+        `mode` (local|global|auto) überschreibt GRAPH_RAG_MODE für diese Frage (Tests/Eval);
+        global nur mit aktivem Graph-Service und Community-Index, sonst Fallback lokal.
+        """
         model = model or self._settings.chat_model
         top_k = top_k or self._settings.top_k
         t_start = time.perf_counter()
@@ -72,14 +80,46 @@ class RagService:
         if history:
             retrieval_query = await self._condense(question, history, model)
 
-        rerank = self._reranker is not None and self._reranker.active
+        # Graph-RAG-Modus bestimmen (Exp 9): global = Community-Berichte als Quellen.
+        graph_active = self._graph is not None and self._graph.active
+        mode = (mode or self._graph.mode) if graph_active else "local"
+        if mode == "auto":
+            mode = await decide_mode(retrieval_query, ollama=self._ollama, model=model)
+        gmeta: dict = {"mode": mode}
+        group_ids = await self._resolve_group_ids(group_id)
+        points: list = []
+        if mode == "global":
+            try:
+                result = await self._graph.global_retrieve(
+                    retrieval_query, ollama=self._ollama, vectors=self._vectors,
+                    embed_model=self._settings.embed_model, model=model, group_ids=group_ids,
+                )
+            except Exception:
+                result = None
+            if result is None:  # kein Community-Index / Fehler -> lokaler Pfad
+                mode, gmeta = "local", {"mode": "local", "fallback": True}
+            else:
+                points, gmeta = result
+
+        rerank = self._reranker is not None and self._reranker.active and mode == "local"
         fetch_k = self._settings.rerank_candidates if rerank else top_k
         try:
-            points = await retrieve(
-                retrieval_query, ollama=self._ollama, vectors=self._vectors,
-                embed_model=self._settings.embed_model, top_k=fetch_k,
-                group_ids=await self._resolve_group_ids(group_id),
-            )
+            if mode == "global":
+                pass  # Quellen stehen bereits fest (Berichte + Originalpassagen)
+            elif graph_active:
+                # Graph-RAG (Exp 8): Kandidaten + dense-erhaltende Fusion. Reihenfolge
+                # bleibt Graph -> Reranker -> Small-to-Big.
+                points = await self._graph.retrieve(
+                    retrieval_query, ollama=self._ollama, vectors=self._vectors,
+                    embed_model=self._settings.embed_model, top_k=fetch_k,
+                    group_ids=group_ids,
+                )
+            else:
+                points = await retrieve(
+                    retrieval_query, ollama=self._ollama, vectors=self._vectors,
+                    embed_model=self._settings.embed_model, top_k=fetch_k,
+                    group_ids=group_ids,
+                )
         except Exception as exc:  # Ollama/Qdrant nicht erreichbar
             yield "error", {"message": f"Retrieval fehlgeschlagen: {exc}"}
             return
@@ -87,12 +127,12 @@ class RagService:
         if rerank and points:
             # Blockierendes torch im Thread, damit der Event-Loop frei bleibt.
             points = await asyncio.to_thread(self._reranker.rerank, question, points, top_k)
-        else:
-            points = points[:top_k]
+        elif mode == "local":
+            points = points[:top_k]  # global: Berichte + Passagen bleiben komplett (m*(1+2))
 
         # Small-to-Big: Top-Treffer um Nachbar-Chunks erweitern (best-effort —
         # ein fehlgeschlagener Lookup darf die Antwort nicht verhindern).
-        if self._settings.small_to_big_enabled and points:
+        if self._settings.small_to_big_enabled and points and mode == "local":
             try:
                 points = await expand_points(
                     points, vectors=self._vectors,
@@ -114,9 +154,12 @@ class RagService:
         ttft_ms: float | None = None
         usage: dict = {}
         try:
-            async for delta, usage_chunk in self._stream_deltas(
-                build_messages(question, points, history), model
-            ):
+            messages = build_messages(
+                question, points, history,
+                system_extra=GLOBAL_SYSTEM_EXTRA if mode == "global" else None,
+                hint=gmeta.get("hint") or None,
+            )
+            async for delta, usage_chunk in self._stream_deltas(messages, model):
                 if usage_chunk:
                     usage = usage_chunk
                 if delta:
@@ -141,6 +184,8 @@ class RagService:
             "sources": extract_citations(answer, points),
             "retrieved": sources_overview(points),
             "conversation_id": conversation_id,
+            "mode": mode,
+            "graph": {k: v for k, v in gmeta.items() if k != "hint"},
         }
         # Optional: ungestützte Zitate via NLI markieren (blockierend -> Thread).
         if self._faithfulness is not None and self._faithfulness.active and done["sources"]:

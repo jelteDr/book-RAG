@@ -23,6 +23,20 @@ class OllamaClient:
         resp.raise_for_status()
         return resp.json().get("models", [])
 
+    async def context_length(self, model: str) -> int | None:
+        """Kontextfenster (num_ctx) des GELADENEN Modells laut `/api/ps`; None, wenn nicht geladen.
+
+        Ollama teilt OLLAMA_CONTEXT_LENGTH auf OLLAMA_NUM_PARALLEL Slots auf und schneidet
+        längere Prompts still ab (Server-Log: „truncating input prompt") — das hat in diesem
+        Projekt schon dreimal Messungen entwertet. Eval-Skripte prüfen deshalb vorab.
+        """
+        resp = await self._client.get("/api/ps")
+        resp.raise_for_status()
+        for m in resp.json().get("models", []):
+            if m.get("name") == model or m.get("model") == model:
+                return m.get("context_length")
+        return None
+
     async def show(self, model: str) -> dict:
         """Detail-Metadaten eines Modells (native API `/api/show`)."""
         resp = await self._client.post("/api/show", json={"model": model})
@@ -55,12 +69,23 @@ class OllamaClient:
                 yield line
 
     async def complete(
-        self, messages: list[dict], model: str, temperature: float = 0.0, max_tokens: int | None = None
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+        response_format: dict | None = None,
     ) -> str:
-        """Einzelne, nicht-gestreamte Completion (z. B. für Query-Condensation)."""
+        """Einzelne, nicht-gestreamte Completion (z. B. für Query-Condensation).
+
+        `response_format={"type": "json_object"}` schaltet Ollamas JSON-Modus ein
+        (Graph-Extraktion) — nur setzen, wenn der Prompt explizit JSON verlangt.
+        """
         payload: dict = {"model": model, "messages": messages, "stream": False, "temperature": temperature}
         if max_tokens:
             payload["max_tokens"] = max_tokens
+        if response_format:
+            payload["response_format"] = response_format
         resp = await self._client.post("/v1/chat/completions", json=payload)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]

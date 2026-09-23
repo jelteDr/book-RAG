@@ -12,6 +12,7 @@ from app.routes import chat, collections, conversations, groups, health, ingest,
 from app.services.faithfulness_service import FaithfulnessService
 from app.services.model_registry import sync_models
 from app.services.rag_service import RagService
+from app.graph.service import GraphService
 from app.services.reranker_service import RerankerService
 
 
@@ -24,9 +25,16 @@ async def lifespan(app: FastAPI):
     app.state.faithfulness = FaithfulnessService(
         settings.faithfulness_model, settings.faithfulness_check_enabled, settings.faithfulness_threshold
     )
+    app.state.graph = GraphService(
+        settings.graph_dir, settings.graph_rag_enabled, settings.graph_rag_mode,
+        local_mode=settings.graph_local_mode, alpha=settings.graph_alpha,
+        top_m=settings.graph_top_m, min_sim=settings.graph_min_sim,
+        global_m=settings.graph_global_m, global_map=settings.graph_global_map,
+        chunks_per_community=settings.graph_global_chunks_per_community,
+    )
     app.state.rag = RagService(
         app.state.ollama, app.state.vectors, settings, session_factory,
-        app.state.reranker, app.state.faithfulness,
+        app.state.reranker, app.state.faithfulness, graph=app.state.graph,
     )
 
     # DB-Tabellen sicherstellen + Modell-Registry befüllen (best-effort).

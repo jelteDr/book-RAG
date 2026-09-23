@@ -43,3 +43,10 @@ reports/
 /results/contextual_contexts.jsonl
 /results/*.log
 /results/sparse_weights_*
+# Graph-RAG-Artefakte (Extraktion, Graph, Berichte) sind Buchtext-Derivate.
+# Sie liegen unter /data/graph/ (bereits via /data/ ignoriert) — Regel als doppelter Boden.
+/data/graph/
+/results/graph_*.json
+/results/graph_*.jsonl
+/results/global_graph_*.json
+/results/global_graph_*.jsonl

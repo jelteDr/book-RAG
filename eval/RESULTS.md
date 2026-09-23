@@ -296,6 +296,193 @@ komplett. Das dürfte einen Teil der niedrigen Faithfulness (0.667) und der
 Zitat-Ausfälle erklären. Fix: `OLLAMA_CONTEXT_LENGTH=16384` (make-Target
 `ollama-ctx`), danach Metrik-Suite neu laufen lassen.
 
+## Exp 8 — Graph-RAG lokal (`eval/graph_experiment.py`)
+
+**Idee:** Je Chunk extrahiert das Chat-LLM (qwen2.5:7b, temp 0, JSON-Modus) bis zu 8
+Entities (PERSON/PLACE/ORGANISATION/OBJECT/EVENT) und Relationen; daraus entsteht ein
+Entity-Graph (`backend/app/graph/`, Knoten = normalisierte Entities mit Aliasen, Kanten =
+Ko-Erwähnung, `idf = ln(N/n_mentions)` dämpft Hubs wie Dracula). Beim Retrieval wird die
+**deutsche** Frage per bge-m3 gegen die **englischen** Entity-Embeddings verlinkt
+(kein String-Match), 1-Hop-Nachbarn gedämpft aktiviert, und jeder Chunk bekommt ein
+Graph-Signal `g(c) = Σ a(e)·idf(e)`. Fusion **dense-erhaltend**:
+`s = cos(q,c) + α·g̃(c)` — bei α=0 exakt die Baseline (Sanity-Check im Skript). Bewusst
+kein RRF (Exp 2/6: Rang-Fusion verdrängte dense-Treffer).
+
+Arme: `dense` (Baseline, contextual + dedup), `link` (Entity-Linking), `expand`
+(dense-first, Seeds aus Top-3, Ko-Erwähnung ≥ 2), `graph_only` (Diagnose ohne dense).
+
+**Hypothese (vorab festgelegt, vor dem Messlauf committet):**
+- H1: Entity-Linking holt Passagen in die Top-8, die die gefragten Figuren/Orte nur
+  beiläufig erwähnen (dense rankt sie tief) → Hit@8 ↑, MRR mindestens gleich.
+- H2: Der Effekt konzentriert sich auf `multi`/`paraphrase` (n09 Demeter, n10 Erdkisten,
+  n11 Minas Hilfe: Passagen über mehrere Kapitel, wenig lexikalische Überlappung).
+- **Erfolg:** paired besser ≥ 2·schlechter **und** ΔMRR ≥ +0.03 **und** Hit@8 nicht
+  schlechter. **Negativ:** schlechter ≥ besser oder Hit@8 sinkt. Dazwischen: „kein
+  messbarer Effekt bei n=32". Hyperparameter a priori: α=0.03, m=5, τ=0.45; die
+  Sensitivität (α∈{0.02,0.05}, τ∈{0.40,0.50}) ist **post hoc** und dient nur der
+  Einordnung, nicht der Auswahl (kein Dev-Split bei n=32).
+
+**Setup:** Gold v2, n=32 beantwortbar, k=8, Gruppe Horror (Live-Index contextual+dedup),
+paired. Extraktion: 581 Aufrufe, 0 % JSON-Fehler nach Umstellung auf kompaktes JSON
+(max_tokens 600; Pilot v1 mit 450 schnitt 40 % ab), Ø 6,2 Entities + 4,2 Relationen je
+Chunk. Graph: 446 Knoten (148 PERSON, 181 PLACE), 606 Kanten; 303 kleingeschriebene
+Gattungsbegriffe verworfen, 16 Aliase gemergt, 20 ambig belassen („Mina" ≠ „Mina Harker" —
+bewusst, weil auch „Mina Murray" existiert). Hubs: Dracula (494 Chunks), Harker (338),
+Van Helsing (243).
+
+| Arm | Hit@1 | Hit@3 | Hit@5 | Hit@8 | MRR | Cov@8 |
+|---|---|---|---|---|---|---|
+| dense (Baseline) | 0.31 | 0.59 | 0.78 | **0.81** | 0.474 | 0.66 |
+| link (α=0.03) | 0.31 | 0.56 | 0.81 | 0.81 | 0.480 | 0.66 |
+| expand (α=0.03) | 0.34 | 0.59 | 0.72 | 0.81 | 0.481 | 0.67 |
+| graph_only (Diagnose) | 0.12 | 0.28 | 0.38 | 0.47 | 0.234 | 0.35 |
+
+Paired vs. dense (Rang des ersten Span-Treffers): **link 4 besser / 3 schlechter / 25 gleich**
+(Vorzeichentest p = 1.0, ΔMRR +0.006); **expand 3 / 4 / 25** (ΔMRR +0.008). Je Fragetyp
+(Hit@8 / MRR): fact n=26 0.92/0.532 → link 0.92/0.542, expand 0.92/0.541; multi n=3
+0.33/0.111 → link 0.33/0.083, expand 0.33/0.111; paraphrase n=3 unverändert 0.33/0.333.
+Sensitivität `link` (post hoc): α=0.02 MRR 0.483 (4/1/27); **α=0.05 Hit@8 0.84, MRR 0.452
+(4/9/19)**; τ=0.40 0.480, τ=0.50 0.467.
+
+![Graph-RAG lokal](../results/graph_experiment.png)
+
+**Befund: kein messbarer Effekt** (vorab definierter Mittelfall — weder Erfolg noch negativ).
+Beide Arme bewegen bei 25 von 32 Fragen nichts, der Rest ist 4:3 bzw. 3:4; ΔMRR liegt weit
+unter der Schwelle +0.03, Hit@8 bleibt exakt gleich. H1 (Hit@8 ↑) ist widerlegt, H2
+(Effekt bei multi/paraphrase) bei n=3 nicht erkennbar.
+
+**Interpretation:**
+1. **Das Graph-Signal ist real, aber schwach — und komplementär.** `graph_only` allein
+   erreicht MRR 0.234 / Hit@8 0.47 (mehr als bge-m3-Sparse in Exp 6: 0.218 / 0.47) und
+   findet zwei dense-MISSes (d01 @4, n09 @2 — das Demeter/Czarina-Catherine-Multi-Item). Die
+   additive Fusion kann sie aber nicht heben: ihr Cosine liegt zu weit unter dem Top-8-Cut.
+   Mit α=0.05 kommen sie rein (Hit@8 0.84), dafür kippt die Präzision (MRR 0.452, 4:9) — der
+   Graph tauscht Precision gegen Recall, netto kein Gewinn.
+2. **Entity-Linking DE→EN funktioniert für Eigennamen** (Demeter 0.66, Mr. Swales 0.72,
+   Bloofer lady 0.56, Renfield 0.60), **ist aber verrauscht bei Orten**: Paddington, Bath,
+   Whitby Castle tauchen mit 0.5–0.6 bei Fragen auf, die nichts damit zu tun haben —
+   181 PLACE-Knoten aus einer 7B-Extraktion sind schlicht zu viel Beifang, und idf dämpft nur
+   Hubs, nicht Rauschen.
+3. **Die contextual-dense-Baseline lässt wenig Luft:** 26 von 32 Items sind Faktfragen, bei
+   denen der Kontext-Präfix (Exp 5) das Pronomen-/Kontextproblem schon löst — genau das, was
+   ein Entity-Graph sonst beisteuern würde.
+
+**Kosten:** Extraktion 581 LLM-Aufrufe ≈ 2,9 h (Pilot 8,8 s/Chunk, Nachtjob unter Systemlast
+17,8 s), Graph-Build + Embeddings ≈ 1 min, Retrieval-Latenz +14 ms je Frage (dense 35 ms →
+link 49 ms, expand 48 ms; Graph lädt in 10 ms). Speicher: graph.json 0,4 MB + Vektoren 1,7 MB.
+
+**Entscheidung:** `GRAPH_RAG_ENABLED` bleibt aus; der lokale Graph-Arm ist kein Hebel für
+Passagen-Retrieval. Nicht gemessen, aber naheliegend als Folge-Idee: das Graph-Signal nicht
+additiv, sondern als **Kandidaten-Generator für den Reranker** nutzen (dense Top-30 ∪ graph
+Top-10 → Cross-Encoder) — Recall-Gewinn ohne den Precision-Tausch. Die eigentliche
+Graph-RAG-Stärke (thematische Fragen) misst Exp 9.
+
+## Exp 9 — Graph-RAG global: Community-Berichte (`eval/global_graph_experiment.py`)
+
+**Idee:** Der lokale Pfad (Exp 8) findet Passagen. Die eigentliche Stärke von Graph-RAG
+(Microsoft-Stil) liegt bei **thematischen** Fragen über den ganzen Roman („Wie entwickelt
+sich Minas Rolle?"), für die keine einzelne Passage reicht. Dafür: Louvain-Communities auf
+dem Entity-Graphen (Seed 42, deterministisch, Pruning `n_mentions ≥ 2`, `min_size 3`),
+je Community ein englischer LLM-Bericht (title/summary/findings, JSON, temp 0), Berichte
+mit bge-m3 eingebettet. Globaler Pfad: Frage → Top-m Berichte → Quellen = je Bericht `[i]`
+plus 2 repräsentative Originalpassagen `[i+1]`, `[i+2]` (Zitate bleiben im Buchtext
+verankert; Frontend-Chips funktionieren unverändert, Chip = „Zusammenfassung: <Titel>").
+Arm `global_map` zusätzlich mit Map-Step (je Bericht ein Aufruf: relevante Punkte 0–100).
+
+**Warum ein eigenes Gold-Set:** Auf der Span-Metrik kann ein globaler Pfad strukturell nicht
+gewinnen (er liefert Berichte, keine Passagen). `eval/gold_global.jsonl`: 10 thematische
+Dracula-Fragen (DE) mit Rubrik = 3–5 Kernpunkte, **vor** der Berichtserstellung aus
+Buchwissen geschrieben (Leakage-Regel, Datum im `note`-Feld; vom Nutzer kuratiert). Dazu
+3 Kontroll-Items aus gold_v2 (Faktfragen, Rubrik = Gold-Antwort), bei denen global
+erwartungsgemäß **verlieren** sollte — das begründet das Routing statt eines Globalschalters.
+
+**Metriken:** Rubrik-Abdeckung per LLM-Judge (qwen2.5:7b, ein Aufruf je Kernpunkt, JA/NEIN,
+blind, gemischte Reihenfolge) mit Kalibrierung im selben Lauf (Verweigerung → soll ≈ 0 %,
+Rubrik als Antwort → soll ≈ 100 %); NLI-Faithfulness `faith_chunks` nur gegen Buch-Chunks
+(für alle Arme gleich definiert) und `faith_sources` inkl. Berichte; TTFT/e2e/Länge/
+LLM-Aufrufe/Zitatquote; paired Coverage `global_* vs dense16` (dense16 = k=16 als starke
+Baseline für breite Fragen).
+
+**Hypothese (vorab):** Community-Berichte liefern bei thematischen Fragen mehr Kernpunkte
+als 8 oder 16 Einzelpassagen, bei moderat niedrigerer Verankerung im Buchtext.
+- **Positiv:** Coverage(global) ≥ Coverage(dense16) + 0.15 **und** paired ≥ 6/10 besser
+  **und** `faith_chunks` ≥ dense16 − 0.15.
+- **Negativ:** Coverage ≤ dense16 **oder** `faith_chunks` < 0.35 (Halluzinationsverdacht)
+  **oder** Judge-Kalibrierung außerhalb [≤ 20 %, ≥ 80 %] (→ nicht interpretierbar, wird
+  so berichtet).
+- Dazwischen „gemischt": Produktdefault bleibt `local`.
+- Erwartung Kontroll-Items: global schlechter als dense8.
+
+**Setup:** Gruppe Horror (Live-Index), m=6, 2 Passagen je Bericht, temp 0, n=10 global
++ 3 Kontrolle; Louvain **Auflösung 2.0** (vor der Berichtserstellung festgelegt: 1.0 ergab nur
+7 Communities bei Modularität 0.16 mit einem 55-Knoten-Blob um Dracula/Harker/London; 2.0
+ergibt 14 thematisch lesbare Communities — Whitby/Demeter, Sewards Anstalt/Renfield, Lucys
+Krankenzimmer, Verfolgung Varna/Galatz, Transsilvanien-Reise, Carfax; 146 Knoten nach
+Pruning, Modularität 0.11); Judge = Antwortmodell (Bias benannt: gleicher Judge für alle Arme,
+Hand-Stichprobe ≥ 3 Fragen × alle Arme als Spalte `manual_coverage`).
+
+Messlauf 2026-09-23 (nach Ollama-Neustart mit `num_ctx` 16384 — ein erster Lauf mit 4096
+schnitt **alle** 52 Prompts still auf 2050 Token ab und wurde verworfen; die Eval-Skripte prüfen
+das Kontextfenster seitdem vorab). Judge-Kalibrierung: Verweigerung → 2 %, Rubrik als Antwort
+→ 94 % (im Band, Ergebnis interpretierbar). Rubriken = **unkuratierter Entwurf** aus Buchwissen.
+
+| Arm | Coverage (n=10) | Cov. Kontrolle (n=3) | faith_chunks | faith_sources | Zitatquote | Ø Aufrufe | Ø e2e |
+|---|---|---|---|---|---|---|---|
+| dense8 | 0.14 | **0.67** | **0.68** | 0.68 | **0.81** | 1 | **42 s** |
+| dense16 | **0.16** | 0.67 | 0.47 | 0.47 | 0.78 | 1 | 58 s |
+| global_direct | 0.04 | 0.00 (verweigert) | 0.56 | 0.86 | 0.47 | 1 | 81 s |
+| global_map | 0.14 | 0.33 | 0.53 | 0.81 | 0.48 | 7 | 71 s |
+
+Paired Coverage vs. dense16: **global_direct 1 besser / 4 schlechter / 5 gleich**,
+**global_map 1 / 2 / 7**. Je Frage liegen alle vier Arme zwischen 0.0 und 0.6; bei g01, g09,
+g10 trifft kein Arm einen einzigen Kernpunkt.
+
+![Graph-RAG global](../results/global_graph_experiment.png)
+
+**Befund: NEGATIV** (Vorab-Kriterium „Coverage ≤ dense16" erfüllt, für beide globalen Arme).
+Community-Berichte machen die Antworten auf thematische Fragen nicht besser, nur länger,
+langsamer und schlechter zitiert.
+
+**Interpretation:**
+1. **Bodeneffekt bei allen Armen.** Coverage 0.04–0.16 heißt: die Rubriken (Kernpunkte aus
+   dem Wissen über den ganzen Roman) liegen weit über dem, was qwen2.5:7b aus 8–16 Passagen
+   **oder** aus 14 Berichten erzeugt. Beispiel g03 (Dokumente als Erzählmittel): dense16 trifft
+   3/5, global_direct 0/5 — obwohl beide inhaltlich Ähnliches sagen; der strikte JA/NEIN-Judge
+   („ausdrücklich") hat bei so allgemeinen Antworten wenig Auflösung. Bei n=10 sind damit auch
+   die Differenzen zwischen den dense-Armen nicht belastbar. Der Vergleich ist trotzdem
+   entscheidbar: global gewinnt an keiner Stelle systematisch.
+2. **Die Berichte sind das Problem, nicht der Suchpfad.** Der Graph ist ein Ko-Okkurrenz-Graph
+   aus einer 7B-Extraktion; die Louvain-Communities sind Entity-Cluster, keine Themen. 5 von 14
+   Berichten heißen wörtlich „Entities and Relationships in Dracula", der Inhalt ist eine
+   Wer-mit-wem-Aufzählung. `faith_sources` 0.86 vs. `faith_chunks` 0.56 zeigt, worauf sich die
+   globalen Antworten stützen: auf die Berichte, nicht auf den Buchtext. Die Halluzinations-
+   prüfung wandert damit in die Berichtsstufe — und die ist ungeprüft (Smoke-Test: ein Bericht
+   ließ Dr. Seward nach Whitby reisen).
+3. **7B-Degeneration bei langem, gemischtsprachigem Kontext.** g01/global_direct kippt bei
+   ~8,9k Token (englische Berichte, deutsche Frage) mitten im Satz ins Chinesische und erfindet
+   die Figur „Márius Trótski"; 1 von 26 globalen Antworten, 0 von 26 dense. Der große Kontext
+   ist für dieses Modell selbst ein Risiko, nicht nur ein Kostenfaktor.
+4. **Nebenbefund dense16 vs. dense8:** +0.02 Coverage, aber `faith_chunks` 0.68 → 0.47 und
+   e2e +16 s. Mehr Passagen verschlechtern die Verankerung deutlich — k=8 bleibt richtig, auch
+   für breite Fragen.
+5. **Kontroll-Items wie vorhergesagt:** global_direct verweigert Faktfragen ehrlich (Coverage 0,
+   keine Halluzination), dense 0.67. global_map löst als **einziger** Arm n09 (Demeter →
+   Czarina Catherine, das Multi-Hop-Item, das auch in Exp 8 nur `graph_only` fand) — anekdotisch,
+   aber genau der Fragetyp, für den Communities gedacht sind.
+
+**Kosten:** Berichte 14 LLM-Aufrufe ≈ 15 min; Antwort e2e 81 s (direct) bzw. 71 s (map, 7
+Aufrufe) statt 42 s; Zitatquote fällt von 0.81 auf 0.47. Eval-Lauf gesamt ≈ 2,5 h (50 min
+Antworten, 10 min Judge, ~1,5 h NLI auf CPU).
+
+**Entscheidung:** Kein globaler Pfad im Produkt; `GRAPH_RAG_MODE` bleibt `local`, das Flag
+bleibt aus. Der Code bleibt als opt-in (`mode=global` im Chat-Request) für Demos erhalten.
+Was es für einen zweiten Versuch bräuchte, in dieser Reihenfolge: (a) Berichte, die Themen
+statt Entity-Listen beschreiben — d. h. eine Extraktion mit Relations-Beschreibungen und ein
+größeres Modell dafür; (b) Berichte per NLI gegen die repräsentativen Passagen prüfen, bevor
+sie Quellen werden; (c) ein größeres Antwortmodell oder kürzere Kontexte (kein 9k-Token-Prompt
+für ein 7B); (d) kuratierte Rubriken mit Kernpunkten, die aus dem Text belegbar sind, und ein
+Judge mit Skala statt JA/NEIN.
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
@@ -307,3 +494,9 @@ Zitat-Ausfälle erklären. Fix: `OLLAMA_CONTEXT_LENGTH=16384` (make-Target
 4. Bootstrap-CI / paired Test, sobald n≥30.
 5. ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in via
    `RERANKER_ENABLED`, s. README).
+6. ~~Exp 8 — Graph-RAG lokal~~ ✅ gemessen: kein messbarer Effekt (4:3:25 / 3:4:25), Flag
+   bleibt aus; offen: Graph-Signal als Reranker-Kandidatenquelle.
+7. ~~Exp 9 — Graph-RAG global~~ ✅ gemessen: negativ (Coverage 0.04/0.14 vs. dense16 0.16,
+   Berichte zu flach, 7B degeneriert bei 9k Token); kein globaler Pfad im Produkt.
+8. Nebenbefund aus Exp 9 nachmessen: k=16 senkt faith_chunks 0.68 → 0.47 — lohnt ein
+   k-Sweep auf der Metrik-Suite (k ∈ {4, 6, 8, 12}).

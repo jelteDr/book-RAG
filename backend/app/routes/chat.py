@@ -16,6 +16,7 @@ class ChatRequest(BaseModel):
     group_id: str | None = None
     top_k: int | None = None
     conversation_id: int | None = None
+    mode: str | None = None  # local | global | auto — überschreibt GRAPH_RAG_MODE (Graph-RAG)
 
 
 def _sse(event: str, data: dict) -> str:
@@ -29,7 +30,7 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
     async def stream() -> AsyncIterator[str]:
         async for event, payload in service.answer(
             req.question, model=req.model, group_id=req.group_id, top_k=req.top_k,
-            conversation_id=req.conversation_id,
+            conversation_id=req.conversation_id, mode=req.mode,
         ):
             yield _sse(event, payload)
 
