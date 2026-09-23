@@ -483,6 +483,49 @@ sie Quellen werden; (c) ein größeres Antwortmodell oder kürzere Kontexte (kei
 für ein 7B); (d) kuratierte Rubriken mit Kernpunkten, die aus dem Text belegbar sind, und ein
 Judge mit Skala statt JA/NEIN.
 
+## Exp 10 — k-Sweep: wie viele Passagen verträgt das 7B-Modell? (`eval/answer_eval.py --k`)
+
+**Anlass:** Nebenbefund aus Exp 9 — dense16 senkte `faith_chunks` gegenüber dense8 von 0.68
+auf 0.47. **Vorab-Erwartung:** Faithfulness fällt mit k monoton, Hit@k steigt, Sweet Spot 6–8.
+
+**Setup:** Metrik-Suite auf Gold v2 (n=36, davon 32 beantwortbar, 4 unanswerable), span-basiert,
+qwen2.5:7b, temp 0, **num_ctx 16384** (erste Suite seit dem Kontext-Fix), NLI auf MPS.
+k ∈ {4, 6, 8, 12}; alles andere identisch (contextual + dedup, kein S2B, kein Reranker).
+
+| k | Faithfulness | ROUGE-L | Token-F1 | Refusal (unansw.) | False-Refusal | Hit@k | MRR | TTFT med. | e2e med. |
+|---|---|---|---|---|---|---|---|---|---|
+| 4 | **0.564** | 0.173 | 0.207 | 0.75 | 0.00 | 0.688 | 0.451 | 5.2 s | **8.2 s** |
+| 6 | 0.505 | 0.185 | 0.217 | 0.75 | 0.00 | 0.781 | 0.469 | 4.6 s | 9.6 s |
+| 8 (Default) | 0.448 | 0.172 | 0.197 | 0.75 | 0.00 | **0.812** | **0.474** | 12.8 s | 16.1 s |
+| 12 | 0.444 | 0.179 | 0.236 | 0.75 | 0.00 | 0.812 | 0.474 | 25.8 s | 32.3 s |
+
+Paired Faithfulness je Frage vs. k=8 (n=32): k=4 **13 besser / 5 schlechter / 14 gleich**
+(Vorzeichentest p ≈ 0.10), k=6 10 / 6 / 16 (p ≈ 0.45), k=12 13 / 9 / 10 (p ≈ 0.52).
+
+![k-Sweep](../results/ksweep_experiment.png)
+
+**Befund:** Die Erwartung bestätigt sich als **Trend**, nicht als signifikanter Effekt:
+Faithfulness fällt monoton 0.56 → 0.51 → 0.45 → 0.44, Hit@k sättigt bei 8 (0.81), ab k=8
+kostet jede weitere Passage nur noch Latenz (e2e 16 s → 32 s bei k=12) ohne Retrieval-Gewinn.
+ROUGE-L/F1 sind flach (Paraphrasen-Problem, s. Metrik-Suite oben), Refusal-Verhalten ist von
+k unabhängig (3/4 unanswerable verweigert, 0 False-Refusals bei allen k). Bei n=32 und den
+Streuungen (k=12 vs. 8 ist 13:9 trotz niedrigerem Mittel) ist keiner der Paarvergleiche
+signifikant; die Monotonie über vier Stufen ist das belastbarere Argument.
+
+**Einordnung der alten Zahl:** Die bisher berichtete Faithfulness 0.667 (n=21, kapitel-basiert)
+entstand mit `num_ctx` 4096: Ollama kürzte die Prompts still auf 2050 Token, das Modell sah
+effektiv nur die letzten ~2 Passagen — genau der k-Bereich, in dem die Stützung am höchsten
+ist. Die Zahl war also kein Qualitätsmaß der Pipeline, sondern ein Artefakt der Kürzung.
+Referenz ab jetzt: **k=8 → 0.448** (korrekter Kontext, n=32, span-basiert).
+
+**Empfehlung:** `TOP_K=6` als Default — Faithfulness +0.057, e2e −40 %, dafür Hit@k −0.03
+(eine Frage von 32) und MRR −0.005. k=4 gewinnt weitere +0.06 Stützung, verliert aber vier
+Fragen im Retrieval. Wer Small-to-Big (Exp 7) aktiviert, sollte k eher senken als erhöhen:
+die Erweiterung liefert Kontext, ohne die Passagenzahl zu erhöhen. Default im Repo bleibt bis
+zur Entscheidung 8; Umstellung = eine Env-Zeile (`TOP_K=6`).
+
+**Kosten:** vier Suiten ≈ 55 min gesamt (NLI auf MPS statt CPU: Minuten statt einer Stunde je Lauf).
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
@@ -498,5 +541,6 @@ Judge mit Skala statt JA/NEIN.
    bleibt aus; offen: Graph-Signal als Reranker-Kandidatenquelle.
 7. ~~Exp 9 — Graph-RAG global~~ ✅ gemessen: negativ (Coverage 0.04/0.14 vs. dense16 0.16,
    Berichte zu flach, 7B degeneriert bei 9k Token); kein globaler Pfad im Produkt.
-8. Nebenbefund aus Exp 9 nachmessen: k=16 senkt faith_chunks 0.68 → 0.47 — lohnt ein
-   k-Sweep auf der Metrik-Suite (k ∈ {4, 6, 8, 12}).
+8. ~~k-Sweep~~ ✅ gemessen (Exp 10): Faithfulness fällt monoton mit k, Hit@k sättigt bei 8;
+   Empfehlung TOP_K=6. Offen: Entscheidung über den Default; Bootstrap-CI (Punkt 4) würde
+   die k-Vergleiche erst belastbar machen.

@@ -117,18 +117,23 @@ passagen-basierten Reranker allerdings systematisch.
 Pro Frage wird die volle RAG-Pipeline ausgeführt und gemessen: **ROUGE-L**, **Antwort-Token-F1**,
 **Faithfulness** (Entailment via `mDeBERTa-xnli`, bewusst statt PPL), **Recall@k/MRR**, **TTFT/TPS**.
 
-| Kategorie | Metrik | Wert (mean, n=21) |
-|---|---|---|
-| Antwort | ROUGE-L | 0.124 |
-| Antwort | Antwort-Token-F1 | 0.153 |
-| Antwort | **Faithfulness (NLI)** | **0.667** |
-| Retrieval | Recall@8 | 0.770 |
-| Retrieval | MRR | 0.556 |
-| Serving | TTFT (median) | ~7.4 s\* |
-| Serving | TPS (median) | 11.8 tok/s |
-| Serving | e2e (median) | ~19 s |
+| Kategorie | Metrik | k=8 (Default) | k=6 | k=4 |
+|---|---|---|---|---|
+| Antwort | ROUGE-L | 0.172 | 0.185 | 0.173 |
+| Antwort | Antwort-Token-F1 | 0.197 | 0.217 | 0.207 |
+| Antwort | **Faithfulness (NLI)** | **0.448** | **0.505** | **0.564** |
+| Ehrlichkeit | Refusal-Rate (unanswerable) / False-Refusal | 0.75 / 0.00 | 0.75 / 0.00 | 0.75 / 0.00 |
+| Retrieval | Hit-Rate@k (span) | **0.812** | 0.781 | 0.688 |
+| Retrieval | MRR (span) | **0.474** | 0.469 | 0.451 |
+| Serving | e2e (median) | 16 s | 10 s | 8 s |
 
-<sub>\* TTFT im Batch-Lauf durch Speicherdruck/Modell-Reloads erhöht; interaktiv/warm ~0,2–4 s.</sub>
+<sub>Gold v2, n=36 (32 beantwortbar), span-basiert, `num_ctx` 16384 — Exp 10 in `eval/RESULTS.md`.
+Eine früher hier berichtete Faithfulness von 0.667 war ein Artefakt: Ollama kürzte die Prompts
+still auf 2050 Token, das Modell sah nur die letzten ~2 Passagen (s. Exp 7/10).</sub>
+
+**Trade-off, den die Suite sichtbar macht:** Mehr Passagen verbessern das Retrieval nur bis
+k=8, senken aber die Stützung der Antwort monoton — ein 7B-Modell verliert mit jeder weiteren
+Passage Verankerung. Empfehlung: `TOP_K=6` (Exp 10).
 
 **Kernbeobachtung:** ROUGE-L/F1 sind niedrig, obwohl die Antworten korrekt sind — sie messen nur
 n-Gramm-**Oberflächenüberlappung** und bestrafen Paraphrasen. **Faithfulness (NLI)** ist für ein
