@@ -139,7 +139,7 @@ Passage Verankerung. Empfehlung: `TOP_K=6` (Exp 10).
 n-Gramm-**Oberflächenüberlappung** und bestrafen Paraphrasen. **Faithfulness (NLI)** ist für ein
 generatives RAG-System das aussagekräftigere Qualitätsmaß (misst *Stützung*, nicht Wortgleichheit).
 
-## Wichtige Design-Entscheidungen
+## Design-Entscheidungen
 
 - **Ollama statt vLLM:** läuft nativ (Metal) auf Apple Silicon; ein Prozess für Chat + Embeddings.
 - **`bge-m3` (Embeddings):** multilingual → deutsche Fragen gegen englische Texte, ohne `torch`-Abhängigkeit im Backend.
