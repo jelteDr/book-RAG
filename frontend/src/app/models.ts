@@ -120,7 +120,7 @@ export interface UploadResult {
 
 /** Ein geparstes SSE-Event des /chat-Streams. */
 export interface ChatEvent {
-  event: 'token' | 'done' | 'error';
+  event: 'token' | 'reset' | 'done' | 'error';
   data: {
     content?: string;
     sources?: Source[];

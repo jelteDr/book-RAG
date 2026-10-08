@@ -94,8 +94,12 @@ export class ChatComponent implements OnDestroy {
   ];
   private readonly thinkingIndex = signal(0);
   private thinkingTimer: ReturnType<typeof setInterval> | null = null;
-  readonly thinkingWord = computed(
-    () => this.thinkingWords[this.thinkingIndex() % this.thinkingWords.length],
+  /** Corrective RAG (mode=crag): Backend verwirft einen Entwurf mit unbelegten Zitaten. */
+  private readonly revising = signal(false);
+  readonly thinkingWord = computed(() =>
+    this.revising()
+      ? 'Überarbeitet die Antwort'
+      : this.thinkingWords[this.thinkingIndex() % this.thinkingWords.length],
   );
 
   /** Tickender Sekundenzähler über die gesamte Generierung (Denk-Phase + Streaming). */
@@ -343,6 +347,7 @@ export class ChatComponent implements OnDestroy {
     this.question.set('');
     this.draft.set('');
     this.streaming.set(true);
+    this.revising.set(false);
     this.startThinking();
 
     try {
@@ -355,6 +360,10 @@ export class ChatComponent implements OnDestroy {
       for await (const ev of this.chat.stream(request)) {
         if (ev.event === 'token') {
           this.draft.update((d) => d + (ev.data.content ?? ''));
+        } else if (ev.event === 'reset') {
+          // Neu-Generierung: Entwurf verwerfen, wieder den Warte-Zustand zeigen.
+          this.draft.set('');
+          this.revising.set(true);
         } else if (ev.event === 'done') {
           if (ev.data.conversation_id) this.currentConversationId.set(ev.data.conversation_id);
           this.finish({
