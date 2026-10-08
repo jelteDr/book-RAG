@@ -76,7 +76,7 @@ function chatStream(): Response {
         controller.enqueue(send('token', { content }));
         await new Promise((resolve) => setTimeout(resolve, 40));
       }
-      controller.enqueue(send('done', { sources, model: modelNames[0], ttft_ms: 2500, e2e_ms: 4200, tps: 11.8, conversation_id: 1 }));
+      controller.enqueue(send('done', { sources, model: modelNames[0], ttft_ms: 2500, e2e_ms: 4200, tps: 11.8, conversation_id: 1, crag: { attempts: 2, n_relevant: 3, regenerated: false, refused: false } }));
       controller.close();
     },
   });
@@ -98,6 +98,7 @@ function respond(path: string, method: string): Response {
     }
     return json({});
   }
+  if (path === '/api/health') return json({ status: 'ok', crag: true });
   if (path === '/api/models') return json({ default: modelNames[0], available: modelNames });
   if (path === '/api/models/info') return json(modelsInfo);
   if (path === '/api/metrics') return json(metrics);

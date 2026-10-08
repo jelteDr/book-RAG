@@ -11,6 +11,16 @@ export class ChatService {
     return resp.json();
   }
 
+  /** True, wenn das Backend Corrective RAG anbietet (CRAG_ENABLED). */
+  async isCragAvailable(): Promise<boolean> {
+    try {
+      const resp = await fetch('/api/health');
+      return resp.ok ? Boolean((await resp.json()).crag) : false;
+    } catch {
+      return false;
+    }
+  }
+
   async getConversations(): Promise<Conversation[]> {
     const resp = await fetch('/api/conversations');
     return resp.ok ? resp.json() : [];

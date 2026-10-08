@@ -17,6 +17,15 @@ export interface Meta {
   ttft_ms: number;
   e2e_ms: number;
   tps: number;
+  /** Nur bei Corrective RAG (mode=crag): was die Prüfschleife getan hat. */
+  crag?: CragInfo;
+}
+
+export interface CragInfo {
+  attempts: number;
+  n_relevant: number;
+  regenerated: boolean;
+  refused: boolean;
 }
 
 export interface Message {
@@ -32,6 +41,8 @@ export interface ChatRequest {
   model: string | null;
   group_id: string | null;
   conversation_id?: number | null;
+  /** 'crag' = Corrective RAG (Quellen prüfen, ggf. neu suchen); fehlt = Standardpfad. */
+  mode?: 'crag' | null;
 }
 
 export interface Conversation {
@@ -130,5 +141,6 @@ export interface ChatEvent {
     tps?: number;
     message?: string;
     conversation_id?: number;
+    crag?: CragInfo;
   };
 }
