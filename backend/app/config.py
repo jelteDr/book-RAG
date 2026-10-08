@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     crag_max_regen: int = 1  # Neu-Generierungen nach dem Faithfulness-Check
     crag_unsupported_max: float = 0.5  # Anteil unbelegter Zitate, ab dem neu generiert wird
     crag_grader_model: str | None = None  # None = Chat-Modell der Anfrage
+    # filter (Exp 11): nur grader-relevante Passagen in den Prompt (gemessen: negativ).
+    # trigger (Exp 11b): Grader löst nur den Retry aus, Trefferlisten werden gemischt statt gefiltert.
+    crag_strategy: str = "filter"
 
 
 settings = Settings()

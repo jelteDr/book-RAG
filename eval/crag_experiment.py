@@ -9,6 +9,9 @@ Arme (gleiches Modell, temp 0, gleicher Retriever: contextual + dedup):
   crag_regen  wie crag + Faithfulness-Check -> 1x strenge Neu-Generierung. ACHTUNG: der
               Check nutzt dasselbe NLI-Modell wie die Messung — dieser Arm optimiert auf die
               Metrik; seine Faithfulness ist nicht unabhängig (nur als Systemwert berichtet).
+  crag_soft   Exp 11b: Grader löst NUR den Retry aus, filtert nicht; in den Prompt gehen die
+              ungefilterten Trefferlisten (bei Retry reihum gemischt, max. k). Ohne Retry ist
+              der Prompt identisch zu dense8 -> bei temp 0 muss die Antwort gleich sein (Sanity).
 
 Gemessen: Faithfulness (NLI, Sätze vs. Top-5 der Prompt-Passagen), ROUGE-L, Token-F1,
 Refusal/False-Refusal, Span-Hit/MRR des FINALEN Prompt-Kontexts, e2e, LLM-Aufrufe;
@@ -46,7 +49,7 @@ from app.rag.prompt_builder import build_messages  # noqa: E402
 from app.rag.retriever import retrieve  # noqa: E402
 from app.services.faithfulness_service import FaithfulnessService  # noqa: E402
 
-ARMS = ["dense8", "dense4", "crag", "crag_regen"]
+ARMS = ["dense8", "dense4", "crag", "crag_regen", "crag_soft"]
 CKPT = ROOT / "results" / "crag_answers.jsonl"
 
 
@@ -100,16 +103,16 @@ def plot(summary: dict, path: Path) -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    # Kategoriale Slots 1-4 in fester Reihenfolge (dataviz-Referenzpalette, validiert);
+    # Kategoriale Slots 1-5 in fester Reihenfolge (dataviz-Referenzpalette, validiert);
     # Kontrast < 3:1 bei Slot 3/4 -> Werte stehen immer als Label an den Balken.
-    colors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
+    colors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
     panels = [
         ("faithfulness", "Faithfulness (NLI)", "{:.2f}"),
         ("hit", "Gold-Passage im Prompt (Hit)", "{:.2f}"),
         ("refusal_rate", "Refusal-Rate (unbeantwortbar)", "{:.2f}"),
         ("e2e_median_s", "e2e Median (s)", "{:.1f}"),
     ]
-    fig, axes = plt.subplots(1, len(panels), figsize=(13, 3.6))
+    fig, axes = plt.subplots(1, len(panels), figsize=(15, 3.8))
     for ax, (key, title, fmt) in zip(axes, panels):
         vals = [0.0 if math.isnan(summary[a][key]) else summary[a][key] for a in ARMS]
         bars = ax.bar(range(len(ARMS)), vals, color=colors, width=0.7, edgecolor="white", linewidth=2)
@@ -164,7 +167,7 @@ async def main() -> None:
     ollama = OllamaClient(settings.ollama_base_url, timeout=300)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
 
-    def make_flow(with_check: bool) -> CragFlow:
+    def make_flow(with_check: bool, strategy: str = "filter") -> CragFlow:
         checker = None
         if with_check:
             checker = FaithfulnessService(settings.faithfulness_model, True,
@@ -173,11 +176,12 @@ async def main() -> None:
                           min_relevant=settings.crag_min_relevant,
                           unsupported_max=settings.crag_unsupported_max,
                           grader_model=settings.crag_grader_model, faithfulness=checker,
-                          temperature=0.0)
+                          temperature=0.0, strategy=strategy)
         return CragFlow(nodes, enabled=True, max_retries=settings.crag_max_retries,
                         max_regen=settings.crag_max_regen)
 
-    flows = {"crag": make_flow(False), "crag_regen": make_flow(True)}
+    flows = {"crag": make_flow(False), "crag_regen": make_flow(True),
+             "crag_soft": make_flow(False, "trigger")}
 
     try:
         await ollama.complete([{"role": "user", "content": "OK"}], args.model, max_tokens=1)
@@ -198,7 +202,7 @@ async def main() -> None:
                                             group=args.group, model=args.model)
                     else:
                         r = await run_crag(item, flows[arm], group=args.group, model=args.model,
-                                           k=8, max_regen=0 if arm == "crag" else settings.crag_max_regen)
+                                           k=8, max_regen=settings.crag_max_regen if arm == "crag_regen" else 0)
                     r.update({"arm": arm, "id": item["id"]})
                     ck.write(json.dumps(r, ensure_ascii=False, default=str) + "\n")
                     ck.flush()
@@ -289,6 +293,14 @@ async def main() -> None:
         calib["precision"] = tp / (tp + fp) if tp + fp else None
         calib["recall"] = tp / (tp + fn) if tp + fn else None
 
+    # Sanity (Exp 11b): ohne Retry ist crag_soft prompt-identisch zu dense8 -> gleiche Antwort.
+    sanity = None
+    if {"crag_soft", "dense8"} <= set(arms):
+        single = [it["id"] for it in gold if done[("crag_soft", it["id"])].get("attempts") == 1
+                  and not done[("crag_soft", it["id"])].get("crag_refused")]
+        same = sum(done[("crag_soft", i)]["answer"] == done[("dense8", i)]["answer"] for i in single)
+        sanity = {"single_attempt": len(single), "identical_to_dense8": same}
+
     print(f"\n=== Exp 11 (n={len(gold)}, Modell={args.model}) ===")
     hdr = f"{'Arm':<11} {'Faith':>6} {'ROUGE':>6} {'F1':>6} {'Refus':>6} {'FalseR':>6} " \
           f"{'Hit':>6} {'MRR':>6} {'#Ctx':>5} {'Calls':>5} {'e2e':>6}"
@@ -304,10 +316,13 @@ async def main() -> None:
               f"Δ={v['delta_mean'] if v['delta_mean'] is None else round(v['delta_mean'], 3)}, "
               f"p={v['p_sign']})")
     print(f"\nGrader-Kalibrierung: {calib}")
+    if sanity:
+        print(f"Sanity crag_soft ohne Retry == dense8: {sanity['identical_to_dense8']}/"
+              f"{sanity['single_attempt']}")
 
     out = ROOT / "results" / "crag_experiment.json"
     out.write_text(json.dumps({"model": args.model, "n": len(gold), "summary": summary,
-                               "paired": paired, "grader": calib, "rows": rows}, indent=2))
+                               "paired": paired, "grader": calib, "sanity_soft": sanity, "rows": rows}, indent=2))
     if set(ARMS) <= set(arms):
         plot(summary, ROOT / "results" / "crag_experiment.png")
     print(f"\nErgebnis: {out}")

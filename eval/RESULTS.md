@@ -605,6 +605,27 @@ LLM-Urteil (kein Zusatzaufruf); (c) trainierter/größerer Evaluator wie im Orig
 
 **Kosten:** ein Lauf ≈ 2 h 50 min (4 Arme × 36 Fragen inkl. NLI).
 
+## Exp 11b — Grader nur als Retry-Auslöser (`eval/crag_experiment.py`, Arm `crag_soft`)
+
+**Anlass:** In Exp 11 hat der Grader (Precision 0.22, Recall 0.55) richtige Passagen
+weggefiltert. In 11b filtert er nicht mehr. Er entscheidet nur, ob ein zweiter Suchlauf
+(Stichwort-Rewrite) nötig ist. In den Prompt gehen die **ungefilterten** Trefferlisten; nach
+einem Retry werden beide Listen reihum gemischt (Duplikate/Überlappungen raus, max. k=8).
+Verweigerung bei 0 relevanten Passagen nach dem Retry bleibt. Strategie per
+`CRAG_STRATEGY=trigger` (Default bleibt `filter`).
+
+**Vorab festgelegt (vor dem Messlauf):**
+- Gleicher Aufbau wie Exp 11, dieselben Checkpoints für dense8/dense4/crag/crag_regen; neu nur
+  der Arm `crag_soft` (k=8, ohne Regen).
+- **Sanity:** Ohne Retry ist der Prompt identisch zu dense8 → bei temp 0 identische Antwort.
+  Erwartet: alle Items ohne Retry gleich (sonst ist der Vergleich ungültig).
+- **Erwartung:** Effekt nur auf den ~42 % Retry-Fragen; insgesamt eher klein.
+- **H1b:** Faithfulness ≥ dense8 + 0,03 **und** Gold-im-Prompt (Hit) ≥ dense8 − 0,03 (das Mischen
+  darf die dense-Ränge 5–8 nicht systematisch verdrängen).
+- **H2b:** keine zusätzlichen False-Refusals ggü. dense8.
+- dense4 (0.564) bleibt als ehrliche Referenz in der Tabelle; mit 8 Passagen ist sie für
+  crag_soft nicht erreichbar zu erwarten (Exp 10).
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf

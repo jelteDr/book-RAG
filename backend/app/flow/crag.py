@@ -52,6 +52,7 @@ class CragFlow:
         self._enabled = enabled
         self._max_retries = max_retries
         self._max_regen = max_regen
+        self.strategy = nodes.strategy
         self.graph = build_crag_graph(nodes)
 
     @property
@@ -122,6 +123,7 @@ class CragFlow:
                 "queries": final.get("queries", []),
                 "n_graded": len(final.get("graded", [])),
                 "n_relevant": len(final.get("relevant", [])),
+                "strategy": self.strategy,
                 "regenerated": final.get("regen", 0) > 0,
                 "refused": bool(final.get("refused")),
                 "trace": final.get("trace", []),

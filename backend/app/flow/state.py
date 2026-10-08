@@ -23,6 +23,7 @@ class CragState(TypedDict, total=False):
     # Retrieval-Schleife
     queries: list[str]  # alle bisher gesuchten Anfragen (erste = retrieval_query)
     attempts: int  # Anzahl Suchläufe
+    rankings: list[list[Any]]  # vollständige Trefferliste je Suchlauf (Strategie trigger)
     candidates: list[Any]  # ScoredPoints des LETZTEN Suchlaufs, noch unbewertet
     graded_ids: list[Any]  # IDs aller schon bewerteten Punkte (nicht doppelt bewerten)
     relevant: list[Any]  # als relevant bewertete ScoredPoints (über alle Versuche)
