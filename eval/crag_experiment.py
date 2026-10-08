@@ -105,8 +105,8 @@ def plot(summary: dict, path: Path) -> None:
     colors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
     panels = [
         ("faithfulness", "Faithfulness (NLI)", "{:.2f}"),
+        ("hit", "Gold-Passage im Prompt (Hit)", "{:.2f}"),
         ("refusal_rate", "Refusal-Rate (unbeantwortbar)", "{:.2f}"),
-        ("false_refusal_rate", "False-Refusal-Rate", "{:.2f}"),
         ("e2e_median_s", "e2e Median (s)", "{:.1f}"),
     ]
     fig, axes = plt.subplots(1, len(panels), figsize=(13, 3.6))
@@ -123,7 +123,8 @@ def plot(summary: dict, path: Path) -> None:
         ax.tick_params(axis="y", labelsize=8, colors="#777777")
         ax.grid(axis="y", color="#e6e6e6", linewidth=0.6)
         ax.set_axisbelow(True)
-        ax.set_ylim(0, max(vals + [1e-6]) * 1.18)
+        # Raten/Anteile immer auf 0..1 (sonst Pseudo-Achse bei lauter Nullen), Sekunden frei.
+        ax.set_ylim(0, 1.15 if key != "e2e_median_s" else max(vals + [1.0]) * 1.18)
     fig.suptitle("Exp 11 — Corrective RAG vs. dense (Gold v2, qwen2.5:7b)", fontsize=11)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
@@ -136,8 +137,14 @@ async def main() -> None:
     ap.add_argument("--model", default=settings.chat_model)
     ap.add_argument("--arms", default=",".join(ARMS))
     ap.add_argument("--limit", type=int, help="nur die ersten N Items (Smoke-Test)")
+    ap.add_argument("--plot-only", action="store_true",
+                    help="nur das Diagramm aus results/crag_experiment.json neu zeichnen")
     args = ap.parse_args()
     arms = args.arms.split(",")
+    if args.plot_only:
+        summary = json.loads((ROOT / "results" / "crag_experiment.json").read_text())["summary"]
+        plot(summary, ROOT / "results" / "crag_experiment.png")
+        return
 
     gold = [json.loads(x) for x in Path(args.gold).read_text().splitlines() if x.strip()]
     if args.limit:

@@ -10,6 +10,8 @@
 > - **Graph-RAG-Experiment (September 2026, `backend/app/graph/`):** Exp 8 lokal (kein
 >   messbarer Effekt) und Exp 9 global (Community-Berichte, negativ) gemessen — Code bleibt
 >   opt-in, Flag aus; Hypothesen vorab und Befunde in `eval/RESULTS.md`.
+> - **Corrective RAG mit LangGraph (Oktober 2026, `backend/app/flow/`):** Exp 11 gemessen —
+>   negativ (7B-Grader filtert richtige Passagen weg); opt-in über `CRAG_ENABLED` + Chat-Schalter.
 > - Aktueller Stand & Roadmap: siehe README („Grenzen & Roadmap") und `eval/RESULTS.md`.
 
 ## Kontext
