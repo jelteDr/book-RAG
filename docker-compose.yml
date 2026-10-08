@@ -61,6 +61,7 @@ services:
       - CRAG_MAX_RETRIES=${CRAG_MAX_RETRIES:-1}
       - CRAG_MIN_RELEVANT=${CRAG_MIN_RELEVANT:-2}
       - CRAG_MAX_REGEN=${CRAG_MAX_REGEN:-1}
+      - CRAG_STRATEGY=${CRAG_STRATEGY:-trigger}  # trigger (Exp 11b, neutral) | filter (Exp 11, schaedlich)
       - DATABASE_URL=postgresql+asyncpg://bookrag:bookrag@postgres:5432/bookrag
     extra_hosts:
       - "host.docker.internal:host-gateway"

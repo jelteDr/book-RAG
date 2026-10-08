@@ -11,7 +11,8 @@
 >   messbarer Effekt) und Exp 9 global (Community-Berichte, negativ) gemessen — Code bleibt
 >   opt-in, Flag aus; Hypothesen vorab und Befunde in `eval/RESULTS.md`.
 > - **Corrective RAG mit LangGraph (Oktober 2026, `backend/app/flow/`):** Exp 11 gemessen —
->   negativ (7B-Grader filtert richtige Passagen weg); opt-in über `CRAG_ENABLED` + Chat-Schalter.
+>   negativ (7B-Grader filtert richtige Passagen weg); Exp 11b (Grader nur als Retry-Auslöser)
+>   neutral bei 2,3 × Latenz. Opt-in über `CRAG_ENABLED` + Chat-Schalter, Strategie `trigger`.
 > - Aktueller Stand & Roadmap: siehe README („Grenzen & Roadmap") und `eval/RESULTS.md`.
 
 ## Kontext

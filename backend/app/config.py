@@ -74,7 +74,8 @@ class Settings(BaseSettings):
     crag_grader_model: str | None = None  # None = Chat-Modell der Anfrage
     # filter (Exp 11): nur grader-relevante Passagen in den Prompt (gemessen: negativ).
     # trigger (Exp 11b): Grader löst nur den Retry aus, Trefferlisten werden gemischt statt gefiltert.
-    crag_strategy: str = "filter"
+    # Default trigger: in Exp 11b neutral, filter in Exp 11 schädlich.
+    crag_strategy: str = "trigger"
 
 
 settings = Settings()

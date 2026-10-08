@@ -128,7 +128,7 @@ def plot(summary: dict, path: Path) -> None:
         ax.set_axisbelow(True)
         # Raten/Anteile immer auf 0..1 (sonst Pseudo-Achse bei lauter Nullen), Sekunden frei.
         ax.set_ylim(0, 1.15 if key != "e2e_median_s" else max(vals + [1.0]) * 1.18)
-    fig.suptitle("Exp 11 — Corrective RAG vs. dense (Gold v2, qwen2.5:7b)", fontsize=11)
+    fig.suptitle("Exp 11/11b — Corrective RAG vs. dense (Gold v2, qwen2.5:7b)", fontsize=11)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
 
