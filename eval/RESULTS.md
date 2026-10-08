@@ -526,6 +526,33 @@ zur Entscheidung 8; Umstellung = eine Env-Zeile (`TOP_K=6`).
 
 **Kosten:** vier Suiten ≈ 55 min gesamt (NLI auf MPS statt CPU: Minuten statt einer Stunde je Lauf).
 
+## Exp 11 — Corrective RAG mit LangGraph (`eval/crag_experiment.py`)
+
+**Idee:** Statt die Pipeline linear durchzulaufen, bewertet ein LLM-Grader die Treffer
+(ein gebündelter JSON-Aufruf). Sind es zu wenige relevante (< 2), wird die Anfrage als
+Stichwort-Suche umgeschrieben und erneut gesucht (max. 1 Retry). Danach wird nur mit den
+relevanten Passagen generiert, bei 0 relevanten wird ehrlich verweigert. Optional prüft
+der Faithfulness-Check (NLI) die Zitate und lässt eine Antwort mit > 50 % unbelegten
+Zitaten einmal streng neu generieren. Umgesetzt als LangGraph-Zustandsgraph in `backend/app/flow/`
+(opt-in `mode=crag`, Flag `CRAG_ENABLED`).
+
+**Vorab festgelegt (vor dem Messlauf):**
+- Arme: `dense8` (Baseline), `dense4` (**Längen-Kontrolle** — Exp 10 zeigte, dass weniger
+  Passagen allein die Faithfulness heben; CRAG filtert ebenfalls Passagen weg), `crag`
+  (k=8, ohne Regen), `crag_regen` (mit NLI-Check + 1 Regen). Gold v2, n=36, temp 0, num_ctx 16384.
+- **H1:** `crag` Faithfulness ≥ dense8 + 0,05 **und** nicht schlechter als dense4.
+- **H2:** Refusal-Rate (unanswerable) steigt ggü. dense8 (0,75), False-Refusal steigt um ≤ 5 pp.
+- **H3:** e2e-Median ≤ 2,5 × dense8.
+- Erfolg = H1 und H2; H3 ist die Kostenschranke für den Produktiv-Default.
+- `crag_regen` ist **nicht unabhängig** gemessen (Check und Messung nutzen dasselbe
+  NLI-Modell) — nur als Systemwert berichtet, nicht für H1 gewertet.
+- Zusätzlich: Grader-Kalibrierung gegen die Span-Labels (Precision/Recall je bewerteter Passage).
+
+**Vor dem Lauf behobener Designfehler:** Der Grader sah zunächst nur die ersten 1200 Zeichen
+jeder Passage (Chunks: Median ~2200). Im Smoke-Test (2 Items) wurde dadurch die Gold-Passage
+von d02 verworfen. Die Grenze liegt jetzt bei 4000 (nur gegen Ausreißer). Der Rewrite-Prompt
+enthielt anfangs ein Beispiel aus *Dracula* (= Eval-Buch, Leakage); ersetzt durch *Moby Dick*.
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf

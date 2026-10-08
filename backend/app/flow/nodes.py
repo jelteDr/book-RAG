@@ -30,9 +30,9 @@ from app.rag.streaming import stream_deltas
 
 REFUSAL = "Dazu finde ich in den Quellen nichts."
 
-# Passagen werden für den Grader gekürzt: er soll Themenbezug erkennen, nicht die Antwort
-# formulieren — spart bei k=8 gut die Hälfte des Grader-Prompts.
-GRADE_CHARS = 1200
+# Obergrenze nur gegen Ausreißer: Chunks sind im Median ~2200 Zeichen lang. Eine frühere
+# Kürzung auf 1200 schnitt die Antwortstelle ab (Smoke-Test d02: Gold-Passage verworfen).
+GRADE_CHARS = 4000
 
 _GRADE_SYSTEM = (
     "Du prüfst Suchergebnisse für ein Frage-Antwort-System über Bücher. "
