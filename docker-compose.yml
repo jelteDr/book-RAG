@@ -56,6 +56,11 @@ services:
       - GRAPH_TOP_M=${GRAPH_TOP_M:-5}
       - GRAPH_MIN_SIM=${GRAPH_MIN_SIM:-0.45}
       - GRAPH_DIR=/data/graph
+      # Opt-in Corrective RAG (Exp 11, LangGraph): aktiv fuer Chat-Requests mit mode=crag.
+      - CRAG_ENABLED=${CRAG_ENABLED:-false}
+      - CRAG_MAX_RETRIES=${CRAG_MAX_RETRIES:-1}
+      - CRAG_MIN_RELEVANT=${CRAG_MIN_RELEVANT:-2}
+      - CRAG_MAX_REGEN=${CRAG_MAX_REGEN:-1}
       - DATABASE_URL=postgresql+asyncpg://bookrag:bookrag@postgres:5432/bookrag
     extra_hosts:
       - "host.docker.internal:host-gateway"

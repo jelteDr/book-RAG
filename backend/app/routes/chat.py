@@ -16,7 +16,7 @@ class ChatRequest(BaseModel):
     group_id: str | None = None
     top_k: int | None = None
     conversation_id: int | None = None
-    mode: str | None = None  # local | global | auto — überschreibt GRAPH_RAG_MODE (Graph-RAG)
+    mode: str | None = None  # local | global | auto (Graph-RAG) | crag (Corrective RAG, Exp 11)
 
 
 def _sse(event: str, data: dict) -> str:

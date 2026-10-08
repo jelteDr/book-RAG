@@ -526,6 +526,85 @@ zur Entscheidung 8; Umstellung = eine Env-Zeile (`TOP_K=6`).
 
 **Kosten:** vier Suiten ≈ 55 min gesamt (NLI auf MPS statt CPU: Minuten statt einer Stunde je Lauf).
 
+## Exp 11 — Corrective RAG mit LangGraph (`eval/crag_experiment.py`)
+
+**Idee:** Statt die Pipeline linear durchzulaufen, bewertet ein LLM-Grader die Treffer
+(ein gebündelter JSON-Aufruf). Sind es zu wenige relevante (< 2), wird die Anfrage als
+Stichwort-Suche umgeschrieben und erneut gesucht (max. 1 Retry). Danach wird nur mit den
+relevanten Passagen generiert, bei 0 relevanten wird ehrlich verweigert. Optional prüft
+der Faithfulness-Check (NLI) die Zitate und lässt eine Antwort mit > 50 % unbelegten
+Zitaten einmal streng neu generieren. Umgesetzt als LangGraph-Zustandsgraph in `backend/app/flow/`
+(opt-in `mode=crag`, Flag `CRAG_ENABLED`).
+
+**Vorab festgelegt (vor dem Messlauf):**
+- Arme: `dense8` (Baseline), `dense4` (**Längen-Kontrolle** — Exp 10 zeigte, dass weniger
+  Passagen allein die Faithfulness heben; CRAG filtert ebenfalls Passagen weg), `crag`
+  (k=8, ohne Regen), `crag_regen` (mit NLI-Check + 1 Regen). Gold v2, n=36, temp 0, num_ctx 16384.
+- **H1:** `crag` Faithfulness ≥ dense8 + 0,05 **und** nicht schlechter als dense4.
+- **H2:** Refusal-Rate (unanswerable) steigt ggü. dense8 (0,75), False-Refusal steigt um ≤ 5 pp.
+- **H3:** e2e-Median ≤ 2,5 × dense8.
+- Erfolg = H1 und H2; H3 ist die Kostenschranke für den Produktiv-Default.
+- `crag_regen` ist **nicht unabhängig** gemessen (Check und Messung nutzen dasselbe
+  NLI-Modell) — nur als Systemwert berichtet, nicht für H1 gewertet.
+- Zusätzlich: Grader-Kalibrierung gegen die Span-Labels (Precision/Recall je bewerteter Passage).
+
+**Vor dem Lauf behobener Designfehler:** Der Grader sah zunächst nur die ersten 1200 Zeichen
+jeder Passage (Chunks: Median ~2200). Im Smoke-Test (2 Items) wurde dadurch die Gold-Passage
+von d02 verworfen. Die Grenze liegt jetzt bei 4000 (nur gegen Ausreißer). Der Rewrite-Prompt
+enthielt anfangs ein Beispiel aus *Dracula* (= Eval-Buch, Leakage); ersetzt durch *Moby Dick*.
+
+**Ergebnis** (n=36, davon 32 beantwortbar, 4 unanswerable; Hit/MRR über die Passagen, die
+tatsächlich im Prompt standen):
+
+| Arm | Faithfulness | ROUGE-L | F1 | Refusal (unansw.) | False-Refusal | Gold im Prompt (Hit) | MRR | Ø Passagen | Ø LLM-Aufrufe | e2e med. |
+|---|---|---|---|---|---|---|---|---|---|---|
+| dense8 | 0.448 | 0.172 | 0.197 | 0.75 | 0.00 | **0.812** | 0.474 | 8.0 | 1.0 | 19.4 s |
+| dense4 | **0.564** | 0.173 | 0.207 | 0.75 | 0.00 | 0.688 | 0.451 | 4.0 | 1.0 | 4.7 s* |
+| crag | 0.410 | 0.189 | 0.229 | 0.75 | 0.00 | 0.531 | 0.479 | 2.3 | 2.8 | 29.2 s |
+| crag_regen | 0.426 | 0.175 | 0.216 | 0.75 | 0.00 | 0.531 | 0.479 | 2.3 | 3.3 | 13.2 s* |
+
+Paired Faithfulness (besser:schlechter:gleich, n=32): crag vs. dense8 **9:11:12** (Δ −0.038,
+p ≈ 0.82), crag vs. dense4 **6:14:12** (Δ −0.154, p ≈ 0.12). Retry in 42 % der Fragen;
+`crag_regen` generierte in 53 % neu.
+
+Grader-Kalibrierung (306 bewertete Passagen, Wahrheit = Span-Overlap): **Precision 0.22,
+Recall 0.55** (TP 18 / FP 63 / FN 15 / TN 210). Auf den unbeantwortbaren Fragen hielt er 3 von 55
+Passagen für relevant.
+
+![Exp 11](../results/crag_experiment.png)
+
+**Befund — negativ, Hypothesen nicht bestätigt:**
+- **H1 verfehlt:** Faithfulness sinkt leicht (0.448 → 0.410) statt um ≥ 0,05 zu steigen, und
+  CRAG verliert klar gegen die billige Längen-Kontrolle dense4 (0.564; 6:14). Die Annahme
+  „weniger, dafür geprüfte Passagen“ trägt nicht, weil die Prüfung schlecht ist.
+- **H2 verfehlt:** Refusal-Rate unverändert 0.75 (3/4). Die explizite Verweigerung bei 0 relevanten
+  Passagen griff nie zusätzlich. Positiv: keine einzige False-Refusal.
+- **H3** formal erfüllt (29,2 s ≈ 1,5 × dense8), aber ohne Qualitätsgewinn irrelevant.
+- **Ursache: der Grader.** Ein per Prompt gesteuertes 7B-Modell bewertet DE-Fragen gegen
+  EN-Passagen nahe am Zufall: Fast jede zweite Gold-Passage wirft es weg, und 78 % seiner
+  „relevant“-Urteile sind falsch. Dadurch steht die antwort-tragende Passage nur noch bei
+  53 % der Fragen im Prompt (dense8: 81 %). Der Retry hilft kaum, weil derselbe Grader auch die
+  neuen Treffer bewertet. MRR steigt nur scheinbar (0.479), weil über eine viel kürzere Liste
+  gerechnet wird.
+- **Leichter ROUGE/F1-Anstieg** (+0,02/+0,03): kürzere Kontexte → knappere Antworten, keine
+  bessere Verankerung.
+- `crag_regen` (nicht unabhängig, s. o.) holt nur +0,016 und bleibt unter dense8.
+
+\* **Latenz-Vorbehalt:** Die Arme liefen je Frage direkt nacheinander. Ollama nutzt den
+Prefix-Cache: `dense4` (Prompt-Anfang identisch mit dense8) und `crag_regen` (identische
+Grader-Prompts wie crag, temp 0) profitierten davon. Deshalb wirkt crag_regen schneller als
+crag. Zusätzlich liefen zeitweise Docker-Builds parallel. Belastbar ist nur `crag` vs. `dense8`
+grob (≈ 1,5×); dense8/dense4-Qualitätswerte sind identisch zu Exp 10 (temp 0, reproduziert).
+
+**Entscheidung:** `CRAG_ENABLED` bleibt im Repo-Default aus; der Modus bleibt opt-in
+(Chat-Schalter „Prüfen“) zum Demonstrieren und Weiterforschen. Der LangGraph-Aufbau selbst hat
+funktioniert (Schleifengrenzen, Streaming, Reset, Tests); das schwache Glied ist das Modell in
+den Knoten. Nächste Varianten, gleicher Messaufbau: (a) Grader nur als **Retry-Auslöser**,
+Passagen zusammenführen statt filtern (CRAG-„Ambiguous“-Pfad); (b) Score-Schwelle statt
+LLM-Urteil (kein Zusatzaufruf); (c) trainierter/größerer Evaluator wie im Original-Paper.
+
+**Kosten:** ein Lauf ≈ 2 h 50 min (4 Arme × 36 Fragen inkl. NLI).
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
@@ -544,3 +623,6 @@ zur Entscheidung 8; Umstellung = eine Env-Zeile (`TOP_K=6`).
 8. ~~k-Sweep~~ ✅ gemessen (Exp 10): Faithfulness fällt monoton mit k, Hit@k sättigt bei 8;
    Empfehlung TOP_K=6. Offen: Entscheidung über den Default; Bootstrap-CI (Punkt 4) würde
    die k-Vergleiche erst belastbar machen.
+9. ~~Exp 11 — Corrective RAG (LangGraph)~~ ✅ gemessen: negativ (Faithfulness 0.410 vs. 0.448,
+   gegen dense4 6:14; Grader-Precision 0.22). Offen: Grader nur als Retry-Auslöser (11b),
+   Score-Schwelle statt LLM-Urteil.

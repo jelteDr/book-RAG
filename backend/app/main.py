@@ -13,6 +13,8 @@ from app.services.faithfulness_service import FaithfulnessService
 from app.services.model_registry import sync_models
 from app.services.rag_service import RagService
 from app.graph.service import GraphService
+from app.flow.crag import CragFlow
+from app.flow.nodes import CragNodes
 from app.services.reranker_service import RerankerService
 
 
@@ -32,9 +34,18 @@ async def lifespan(app: FastAPI):
         global_m=settings.graph_global_m, global_map=settings.graph_global_map,
         chunks_per_community=settings.graph_global_chunks_per_community,
     )
+    app.state.crag = CragFlow(
+        CragNodes(
+            app.state.ollama, app.state.vectors, embed_model=settings.embed_model,
+            min_relevant=settings.crag_min_relevant, unsupported_max=settings.crag_unsupported_max,
+            grader_model=settings.crag_grader_model, faithfulness=app.state.faithfulness,
+        ),
+        enabled=settings.crag_enabled, max_retries=settings.crag_max_retries,
+        max_regen=settings.crag_max_regen,
+    )
     app.state.rag = RagService(
         app.state.ollama, app.state.vectors, settings, session_factory,
-        app.state.reranker, app.state.faithfulness, graph=app.state.graph,
+        app.state.reranker, app.state.faithfulness, graph=app.state.graph, crag=app.state.crag,
     )
 
     # DB-Tabellen sicherstellen + Modell-Registry befüllen (best-effort).

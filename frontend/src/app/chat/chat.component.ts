@@ -22,6 +22,8 @@ import {
   LucideAngularModule,
   MessagesSquare,
   Plus,
+  Shield,
+  ShieldCheck,
   Trash2,
   TriangleAlert,
   X,
@@ -34,6 +36,16 @@ import { Collection, Conversation, Group, Message, Source } from '../models';
 interface Segment {
   text: string;
   marker: number | null;
+}
+
+const CRAG_KEY = 'bookrag-crag';
+
+function readCragPref(): boolean {
+  try {
+    return localStorage.getItem(CRAG_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 @Component({
@@ -63,6 +75,8 @@ export class ChatComponent implements OnDestroy {
   readonly expanded = signal<Source | null>(null);
 
   readonly icons = {
+    Shield,
+    ShieldCheck,
     ArrowUp,
     Check,
     ChevronDown,
@@ -94,8 +108,16 @@ export class ChatComponent implements OnDestroy {
   ];
   private readonly thinkingIndex = signal(0);
   private thinkingTimer: ReturnType<typeof setInterval> | null = null;
-  readonly thinkingWord = computed(
-    () => this.thinkingWords[this.thinkingIndex() % this.thinkingWords.length],
+  /** Corrective RAG: Schalter nur sichtbar, wenn das Backend es anbietet; Wahl bleibt gespeichert. */
+  readonly cragAvailable = signal(false);
+  readonly cragOn = signal(readCragPref());
+
+  /** Corrective RAG (mode=crag): Backend verwirft einen Entwurf mit unbelegten Zitaten. */
+  private readonly revising = signal(false);
+  readonly thinkingWord = computed(() =>
+    this.revising()
+      ? 'Überarbeitet die Antwort'
+      : this.thinkingWords[this.thinkingIndex() % this.thinkingWords.length],
   );
 
   /** Tickender Sekundenzähler über die gesamte Generierung (Denk-Phase + Streaming). */
@@ -137,7 +159,18 @@ export class ChatComponent implements OnDestroy {
     });
   }
 
+  toggleCrag(): void {
+    const next = !this.cragOn();
+    this.cragOn.set(next);
+    try {
+      localStorage.setItem(CRAG_KEY, next ? '1' : '0');
+    } catch {
+      /* privater Modus o. Ä. — Wahl gilt dann nur für diese Sitzung */
+    }
+  }
+
   private async load(): Promise<void> {
+    void this.chat.isCragAvailable().then((ok) => this.cragAvailable.set(ok));
     try {
       const res = await this.chat.getModels();
       const available = res.available ?? [];
@@ -343,6 +376,7 @@ export class ChatComponent implements OnDestroy {
     this.question.set('');
     this.draft.set('');
     this.streaming.set(true);
+    this.revising.set(false);
     this.startThinking();
 
     try {
@@ -351,10 +385,15 @@ export class ChatComponent implements OnDestroy {
         model: this.selectedModel() || null,
         group_id: this.selectedGroup() || null,
         conversation_id: this.currentConversationId(),
+        mode: this.cragAvailable() && this.cragOn() ? ('crag' as const) : null,
       };
       for await (const ev of this.chat.stream(request)) {
         if (ev.event === 'token') {
           this.draft.update((d) => d + (ev.data.content ?? ''));
+        } else if (ev.event === 'reset') {
+          // Neu-Generierung: Entwurf verwerfen, wieder den Warte-Zustand zeigen.
+          this.draft.set('');
+          this.revising.set(true);
         } else if (ev.event === 'done') {
           if (ev.data.conversation_id) this.currentConversationId.set(ev.data.conversation_id);
           this.finish({
@@ -366,6 +405,7 @@ export class ChatComponent implements OnDestroy {
               ttft_ms: ev.data.ttft_ms ?? 0,
               e2e_ms: ev.data.e2e_ms ?? 0,
               tps: ev.data.tps ?? 0,
+              crag: ev.data.crag,
             },
           });
         } else if (ev.event === 'error') {

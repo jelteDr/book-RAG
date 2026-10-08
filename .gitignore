@@ -50,3 +50,4 @@ reports/
 /results/graph_*.jsonl
 /results/global_graph_*.json
 /results/global_graph_*.jsonl
+/results/crag_answers.jsonl

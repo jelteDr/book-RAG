@@ -161,10 +161,44 @@ char-Offsets zusammengefügt, kein Re-Embedding. Exp 7: Die antwort-tragende Pas
 deutlich öfter in Quelle [1] (MRR 0.474 → 0.540, kein Item schlechter), Kosten +36 % Prompt-Länge
 (→ vorher `make ollama-ctx`, sonst schneidet der Runner den Prompt ab).
 
+**Optional: Corrective RAG mit LangGraph** (`CRAG_ENABLED=true`, Chat-Request `mode=crag`,
+`backend/app/flow/`): Ein Grader bewertet die Treffer. Bei zu wenig Relevantem wird die Anfrage
+umgeschrieben und neu gesucht. Generiert wird nur mit relevanten Passagen; ist nichts
+relevant, wird ehrlich verweigert. Mit aktivem Faithfulness-Check wird eine Antwort mit zu vielen
+unbelegten Zitaten einmal streng neu generiert (das Frontend leert die Bubble per SSE-`reset`).
+
+```mermaid
+graph TD;
+  start([Frage]) --> retrieve --> grade
+  grade -- "≥ 2 relevant" --> generate
+  grade -- "zu wenig, Retry übrig" --> rewrite --> retrieve
+  grade -- "nichts relevant" --> refuse --> ende([Antwort])
+  generate --> check
+  check -- "ok" --> ende
+  check -- "> 50 % unbelegt, Regen übrig" --> generate
+```
+
+**Gemessen (Exp 11, negativ):** Faithfulness 0.410 statt 0.448 (dense8), klar unter der
+billigen Kontrolle k=4 (0.564); die Gold-Passage steht nur noch bei 53 % statt 81 % der Fragen im
+Prompt. Ursache ist der 7B-Grader (Precision 0.22, Recall 0.55 gegen die Span-Labels). Der Modus
+bleibt deshalb opt-in (Chat-Schalter „Prüfen“), der Default bleibt der lineare Pfad.
+
+![Exp 11](results/crag_experiment.png)
+
+**Warum LangGraph, aber kein LangChain?** LangChain ist eine Baustein-Bibliothek (Modell-Wrapper,
+Vektorspeicher, Retriever, Splitter), LangGraph eine Orchestrierungs-Laufzeit (Zustand, bedingte
+Kanten, **Schleifen**, Streaming). Die Bausteine dieses Projekts sind bewusst eigene und
+durchgemessen: Overlap-Dedup, Small-to-Big über deterministische Punkt-IDs und char-Offsets,
+Kontext nur im Embedding, `MatchAny`-Sammelgruppen. Alle Eval-Skripte rufen genau diese Funktionen
+auf. Ein Umbau auf LangChain-Abstraktionen hätte jede Zahl aus Exp 1–10 entwertet, ohne neue
+Fähigkeit. Die lineare Pipeline bleibt deshalb ein schlichter Service. LangGraph kommt nur dort zum
+Einsatz, wo der Ablauf tatsächlich verzweigt und sich wiederholt; die Knoten sind dünne Wrapper um
+die vorhandenen Funktionen (Abhängigkeit: `langgraph` + `langchain-core`, keine LangChain-Integrationen).
+
 ## Projektstruktur
 
 ```
-backend/    FastAPI (routes/ · services/ · rag/ · ingestion/ · clients/ · db/)
+backend/    FastAPI (routes/ · services/ · rag/ · flow/ (LangGraph) · graph/ · ingestion/ · clients/ · db/)
 frontend/   Angular (chat/ · groups/ · models/ · dashboard/ · shell/ · ui/ · services), nginx-Proxy
 eval/       Gold-Set + Experimente (retrieval/lang/hybrid/reranker/answer) + RESULTS.md
 notebooks/  DS-Notebooks (Gold-Set v2: Span-Labels, PCA-Karte, Wortwolken)
@@ -194,6 +228,9 @@ Git Flow: `main` (stabil) ← `develop` (Integration) ← `feature/*`. Commits a
   länger und schlechter zitiert, nicht besser; ein 7B degeneriert bei 9k-Token-Prompts.
   Beides bleibt opt-in im Code, das Flag bleibt aus. Hypothesen vorab, Zahlen und Interpretation
   in `eval/RESULTS.md`.
+- **Corrective RAG** (`backend/app/flow/`, LangGraph, opt-in `CRAG_ENABLED` + Chat-Schalter):
+  **Exp 11 negativ** — ein per Prompt gesteuerter 7B-Grader filtert zu viele richtige Passagen weg.
+  Nächster Versuch: Grader nur als Retry-Auslöser statt als Filter.
 - Bewusst minimal (lokales Projekt): kein Auth/CORS/Rate-Limiting.
 - ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in, s. o.).
 - ~~Ingestion-UI, Gruppen-Verwaltung, Modellwechsel-UI~~ ✅ umgesetzt.

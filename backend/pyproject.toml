@@ -16,6 +16,7 @@ dependencies = [
     "greenlet>=3.0",             # von SQLAlchemy-async benötigt
     "networkx>=3.3",             # Graph-RAG (Exp 8): Entity-Graph, Communities
     "numpy>=1.26",               # Graph-RAG: Entity-Vektoren (Cosine per Matrixprodukt)
+    "langgraph>=1.2.14",         # Corrective RAG (Exp 11): Schleifen-Orchestrierung, opt-in
 ]
 
 [dependency-groups]

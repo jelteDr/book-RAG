@@ -201,6 +201,9 @@
                   <div class="mt-2 whitespace-normal text-[11px] text-ink-muted">
                     {{ msg.meta.model }} · TTFT {{ fmtSecs(msg.meta.ttft_ms) }} · gesamt
                     {{ fmtSecs(msg.meta.e2e_ms) }} · {{ msg.meta.tps }} tok/s
+                    @if (msg.meta.crag; as c) {
+                      · Quellen geprüft ({{ c.n_relevant }} relevant{{ c.attempts > 1 ? ', ' + c.attempts + ' Suchläufe' : '' }}{{ c.regenerated ? ', überarbeitet' : '' }})
+                    }
                   </div>
                 }
               } @else {<span>{{ msg.text }}</span>}
@@ -334,6 +337,21 @@
               </div>
             }
           </div>
+          <!-- Corrective RAG: Quellen vor der Antwort prüfen lassen (nur wenn das Backend es anbietet) -->
+          @if (cragAvailable()) {
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost shrink-0 !px-2.5 !font-medium"
+              [class.!text-accent]="cragOn()"
+              [class.!text-ink-muted]="!cragOn()"
+              [attr.aria-pressed]="cragOn()"
+              title="Quellen prüfen (Corrective RAG): Treffer bewerten, bei Bedarf neu suchen, nur Belegtes antworten — dauert länger"
+              (click)="toggleCrag()"
+            >
+              <lucide-icon [img]="cragOn() ? icons.ShieldCheck : icons.Shield" [size]="15" aria-hidden="true" class="shrink-0" />
+              <span class="truncate">Prüfen{{ cragOn() ? ': an' : '' }}</span>
+            </button>
+          }
         </div>
       </div>
     </div>
