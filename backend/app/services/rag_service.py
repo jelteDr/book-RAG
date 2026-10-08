@@ -8,7 +8,6 @@ testbaren Bausteinen (retriever/prompt_builder/citations); der Service verdrahte
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -25,6 +24,7 @@ from app.graph.router import decide_mode
 from app.rag.expander import expand_points
 from app.rag.prompt_builder import build_messages
 from app.rag.retriever import retrieve
+from app.rag.streaming import stream_deltas
 from app.validation import validate_question
 
 # Ein Event ist (name, payload) — die Route macht daraus SSE.
@@ -41,6 +41,7 @@ class RagService:
         reranker=None,
         faithfulness=None,
         graph=None,
+        crag=None,
     ) -> None:
         self._ollama = ollama
         self._vectors = vectors
@@ -49,6 +50,7 @@ class RagService:
         self._reranker = reranker
         self._faithfulness = faithfulness
         self._graph = graph  # GraphService (opt-in, Exp 8) oder None
+        self._crag = crag  # CragFlow (opt-in, Exp 11) oder None
 
     async def answer(
         self, question: str, *, model: str | None = None, group_id: str | None = None,
@@ -58,6 +60,7 @@ class RagService:
 
         `mode` (local|global|auto) überschreibt GRAPH_RAG_MODE für diese Frage (Tests/Eval);
         global nur mit aktivem Graph-Service und Community-Index, sonst Fallback lokal.
+        `mode=crag` delegiert an den Corrective-RAG-Graphen (Exp 11), falls aktiv.
         """
         model = model or self._settings.chat_model
         top_k = top_k or self._settings.top_k
@@ -79,6 +82,13 @@ class RagService:
         retrieval_query = question
         if history:
             retrieval_query = await self._condense(question, history, model)
+
+        if mode == "crag" and self._crag is not None and self._crag.active:
+            async for event in self._answer_crag(
+                question, retrieval_query, history, model, group_id, top_k, conversation_id
+            ):
+                yield event
+            return
 
         # Graph-RAG-Modus bestimmen (Exp 9): global = Community-Berichte als Quellen.
         graph_active = self._graph is not None and self._graph.active
@@ -195,6 +205,23 @@ class RagService:
         await self._log_query(question, model, group_id, done)
         await self._save_assistant(conversation_id, answer, model, done["sources"])
         yield "done", done
+
+    async def _answer_crag(
+        self, question: str, retrieval_query: str, history: list[dict], model: str,
+        group_id: str | None, top_k: int, conversation_id: int | None,
+    ) -> AsyncIterator[Event]:
+        """Corrective RAG: der Graph liefert die Events, Persistenz + Logging bleiben hier."""
+        group_ids = await self._resolve_group_ids(group_id)
+        async for event, payload in self._crag.run(
+            question, retrieval_query=retrieval_query, history=history,
+            group_ids=group_ids, model=model, top_k=top_k,
+        ):
+            if event == "done":
+                answer = payload.pop("answer", "")
+                payload["conversation_id"] = conversation_id
+                await self._log_query(question, model, group_id, payload)
+                await self._save_assistant(conversation_id, answer, model, payload["sources"])
+            yield event, payload
 
     async def _resolve_group_ids(self, group_id: str | None) -> list[str] | None:
         """Expandiert einen Sammelgruppen-Slug zu den Mitglieds-Slugs.
@@ -332,18 +359,5 @@ class RagService:
         self, messages: list[dict], model: str
     ) -> AsyncIterator[tuple[str | None, dict | None]]:
         """Parst die rohen SSE-Zeilen von Ollama zu (content-delta, usage)-Paaren."""
-        async for line in self._ollama.chat_stream(messages, model):
-            if not line.startswith("data:"):
-                continue
-            payload = line[len("data:"):].strip()
-            if payload == "[DONE]":
-                return
-            try:
-                chunk = json.loads(payload)
-            except json.JSONDecodeError:
-                continue
-            usage = chunk.get("usage")
-            for choice in chunk.get("choices", []):
-                yield choice.get("delta", {}).get("content"), usage
-            if not chunk.get("choices") and usage:
-                yield None, usage
+        async for item in stream_deltas(self._ollama, messages, model):
+            yield item

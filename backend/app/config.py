@@ -62,5 +62,16 @@ class Settings(BaseSettings):
     faithfulness_model: str = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
     faithfulness_threshold: float = 0.5
 
+    # Corrective RAG (optional, opt-in; Exp 11): LangGraph-Schleife über Chat-Request
+    # `mode=crag`. Grader bewertet die Treffer, bei zu wenig Relevantem wird die Anfrage
+    # umgeschrieben und neu gesucht; mit aktivem Faithfulness-Check wird eine Antwort mit
+    # zu vielen unbelegten Zitaten einmal streng neu generiert. Kostet 1-3 LLM-Aufrufe extra.
+    crag_enabled: bool = False
+    crag_max_retries: int = 1  # zusätzliche Suchläufe nach Umschreiben
+    crag_min_relevant: int = 2  # so viele relevante Passagen reichen für die Antwort
+    crag_max_regen: int = 1  # Neu-Generierungen nach dem Faithfulness-Check
+    crag_unsupported_max: float = 0.5  # Anteil unbelegter Zitate, ab dem neu generiert wird
+    crag_grader_model: str | None = None  # None = Chat-Modell der Anfrage
+
 
 settings = Settings()
