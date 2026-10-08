@@ -605,6 +605,60 @@ LLM-Urteil (kein Zusatzaufruf); (c) trainierter/größerer Evaluator wie im Orig
 
 **Kosten:** ein Lauf ≈ 2 h 50 min (4 Arme × 36 Fragen inkl. NLI).
 
+## Exp 11b — Grader nur als Retry-Auslöser (`eval/crag_experiment.py`, Arm `crag_soft`)
+
+**Anlass:** In Exp 11 hat der Grader (Precision 0.22, Recall 0.55) richtige Passagen
+weggefiltert. In 11b filtert er nicht mehr. Er entscheidet nur, ob ein zweiter Suchlauf
+(Stichwort-Rewrite) nötig ist. In den Prompt gehen die **ungefilterten** Trefferlisten; nach
+einem Retry werden beide Listen reihum gemischt (Duplikate/Überlappungen raus, max. k=8).
+Verweigerung bei 0 relevanten Passagen nach dem Retry bleibt. Strategie per
+`CRAG_STRATEGY=trigger` (Default bleibt `filter`).
+
+**Vorab festgelegt (vor dem Messlauf):**
+- Gleicher Aufbau wie Exp 11, dieselben Checkpoints für dense8/dense4/crag/crag_regen; neu nur
+  der Arm `crag_soft` (k=8, ohne Regen).
+- **Sanity:** Ohne Retry ist der Prompt identisch zu dense8 → bei temp 0 identische Antwort.
+  Erwartet: alle Items ohne Retry gleich (sonst ist der Vergleich ungültig).
+- **Erwartung:** Effekt nur auf den ~42 % Retry-Fragen; insgesamt eher klein.
+- **H1b:** Faithfulness ≥ dense8 + 0,03 **und** Gold-im-Prompt (Hit) ≥ dense8 − 0,03 (das Mischen
+  darf die dense-Ränge 5–8 nicht systematisch verdrängen).
+- **H2b:** keine zusätzlichen False-Refusals ggü. dense8.
+- dense4 (0.564) bleibt als ehrliche Referenz in der Tabelle; mit 8 Passagen ist sie für
+  crag_soft nicht erreichbar zu erwarten (Exp 10).
+
+**Ergebnis** (n=36; dense8/dense4/crag aus demselben Checkpoint wie Exp 11):
+
+| Arm | Faithfulness | ROUGE-L | F1 | Refusal (unansw.) | False-Refusal | Gold im Prompt (Hit) | MRR | Ø Passagen | Ø LLM-Aufrufe | e2e med. |
+|---|---|---|---|---|---|---|---|---|---|---|
+| dense8 | 0.448 | 0.172 | 0.197 | 0.75 | 0.00 | 0.812 | 0.474 | 8.0 | 1.0 | 19.4 s |
+| crag (11, filter) | 0.410 | 0.189 | 0.229 | 0.75 | 0.00 | 0.531 | 0.479 | 2.3 | 2.8 | 29.2 s |
+| **crag_soft (11b)** | **0.449** | 0.167 | 0.191 | 0.75 | **0.03** | 0.781 | 0.463 | 7.8 | 2.8 | 43.8 s |
+| dense4 (Referenz) | 0.564 | 0.173 | 0.207 | 0.75 | 0.00 | 0.688 | 0.451 | 4.0 | 1.0 | 4.7 s |
+
+- **Sanity bestanden:** 21/21 Fragen ohne Retry liefern exakt die dense8-Antwort.
+- Paired Faithfulness vs. dense8: **3:1:27** (n=31, Δ +0.019, p ≈ 0.63); vs. dense4 5:12:14.
+- Retry bei 15/36 Fragen. Von den 11 beantwortbaren Retry-Fragen: Faithfulness besser bei 3
+  (d11, d13, n02), schlechter bei 1 (n08); **n07 wird nach dem Mischen verweigert** (dense8:
+  korrekt beantwortet) → die eine False-Refusal; bei **n02 fällt die Gold-Passage** durch das
+  Mischen aus dem Prompt (Hit −0,031).
+
+**Befund — neutral, Hypothesen knapp verfehlt:**
+- **H1b verfehlt:** Faithfulness praktisch gleich (+0,001 im Mittel, +0,019 gepaart), Hit −0,031
+  (Grenze war −0,03). Der Schaden aus Exp 11 ist weg, ein Nutzen ist nicht messbar.
+- **H2b verfehlt:** 1 zusätzliche Verweigerung (n07).
+- **Nebenbefund:** Alle 4 unbeantwortbaren Fragen lösten einen Retry aus (vs. 11/32 beantwortbare).
+  Das „zu wenig relevant“-Signal des Graders trägt also etwas Information, nur nicht genug, um die
+  Antworten zu verbessern (Refusal bleibt 3/4 wie dense8).
+- **Kosten:** 2,8 LLM-Aufrufe statt 1, e2e ≈ 2,3 × dense8 (43,8 s vs. 19,4 s; dieser Arm lief ohne
+  parallele Builds und ohne Prefix-Cache-Vorteil — die ehrlichste Latenzzahl der Serie).
+
+**Entscheidung:** Corrective RAG mit einem per Prompt gesteuerten 7B-Grader lohnt sich in diesem
+Projekt nicht: als Filter schädlich (Exp 11), als Retry-Auslöser neutral bei doppelten Kosten
+(Exp 11b). Wenn CRAG eingeschaltet wird, ist `trigger` der Default (richtet keinen Schaden an),
+der Repo-Default bleibt `CRAG_ENABLED=false`. Der größere Hebel bleibt laut Exp 10 weniger
+Passagen (`TOP_K` 4–6). Ein trainierter Evaluator wie im Original-Paper wäre der nächste ernsthafte
+Versuch, liegt aber außerhalb des lokalen 7B-Rahmens.
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
@@ -624,5 +678,5 @@ LLM-Urteil (kein Zusatzaufruf); (c) trainierter/größerer Evaluator wie im Orig
    Empfehlung TOP_K=6. Offen: Entscheidung über den Default; Bootstrap-CI (Punkt 4) würde
    die k-Vergleiche erst belastbar machen.
 9. ~~Exp 11 — Corrective RAG (LangGraph)~~ ✅ gemessen: negativ (Faithfulness 0.410 vs. 0.448,
-   gegen dense4 6:14; Grader-Precision 0.22). Offen: Grader nur als Retry-Auslöser (11b),
-   Score-Schwelle statt LLM-Urteil.
+   gegen dense4 6:14; Grader-Precision 0.22). ~~Exp 11b — Grader als Retry-Auslöser~~ ✅ neutral
+   (Faithfulness 0.449 vs. 0.448, 3:1:27) bei 2,3 × Latenz; CRAG-Linie damit abgeschlossen.

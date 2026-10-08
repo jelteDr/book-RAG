@@ -11,7 +11,7 @@ import json
 from qdrant_client import models
 
 from app.flow.crag import CragFlow
-from app.flow.nodes import REFUSAL, CragNodes, parse_grade
+from app.flow.nodes import REFUSAL, CragNodes, interleave, parse_grade
 
 
 def _pt(i: int, score: float = 0.5) -> models.ScoredPoint:
@@ -158,3 +158,41 @@ def test_no_regen_when_disabled():
     vectors = FakeVectors([[_pt(1), _pt(2)]])
     events = _run(_flow(ollama, vectors, faith=FakeFaith(n_bad=5), max_regen=0))
     assert "reset" not in [e for e, _ in events]
+
+
+# --- Exp 11b: Strategie "trigger" (Grader nur als Retry-Auslöser) ----------------------
+
+def _trigger_flow(ollama, vectors) -> CragFlow:
+    nodes = CragNodes(ollama, vectors, embed_model="e", min_relevant=2, unsupported_max=0.5,
+                      strategy="trigger")
+    return CragFlow(nodes, enabled=True, max_retries=1, max_regen=0)
+
+
+def test_interleave_mixes_dedups_and_caps():
+    a = [_pt(1), _pt(2), _pt(3)]
+    b = [_pt(1), _pt(7), _pt(8)]
+    assert [p.id for p in interleave([a], 3)] == [1, 2, 3]  # ein Lauf = unverändert
+    assert [p.id for p in interleave([a, b], 4)] == [1, 2, 7, 3]
+
+
+def test_trigger_keeps_all_passages_without_retry():
+    ollama = FakeOllama(['{"relevant":[1,2]}'])
+    vectors = FakeVectors([[_pt(1, .9), _pt(2, .8), _pt(3, .7), _pt(4, .6)]])
+    done = _run(_trigger_flow(ollama, vectors))[-1][1]
+    assert done["crag"]["attempts"] == 1 and done["crag"]["strategy"] == "trigger"
+    assert len(done["retrieved"]) == 4  # nichts weggefiltert
+
+
+def test_trigger_retry_merges_both_rankings():
+    ollama = FakeOllama(['{"relevant":[]}', '{"relevant":[1]}'])
+    vectors = FakeVectors([[_pt(1, .9), _pt(2, .8)], [_pt(5, .7), _pt(6, .6)]])
+    done = _run(_trigger_flow(ollama, vectors))[-1][1]
+    assert done["crag"]["attempts"] == 2 and done["crag"]["refused"] is False
+    assert [r["score"] for r in done["retrieved"]] == [0.9, 0.7, 0.8, 0.6]
+
+
+def test_trigger_still_refuses_when_nothing_relevant():
+    ollama = FakeOllama(['{"relevant":[]}', '{"relevant":[]}'])
+    vectors = FakeVectors([[_pt(1)], [_pt(2)]])
+    done = _run(_trigger_flow(ollama, vectors))[-1][1]
+    assert done["crag"]["refused"] is True

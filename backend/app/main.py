@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
             app.state.ollama, app.state.vectors, embed_model=settings.embed_model,
             min_relevant=settings.crag_min_relevant, unsupported_max=settings.crag_unsupported_max,
             grader_model=settings.crag_grader_model, faithfulness=app.state.faithfulness,
+            strategy=settings.crag_strategy,
         ),
         enabled=settings.crag_enabled, max_retries=settings.crag_max_retries,
         max_regen=settings.crag_max_regen,

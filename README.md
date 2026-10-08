@@ -182,6 +182,9 @@ graph TD;
 billigen Kontrolle k=4 (0.564); die Gold-Passage steht nur noch bei 53 % statt 81 % der Fragen im
 Prompt. Ursache ist der 7B-Grader (Precision 0.22, Recall 0.55 gegen die Span-Labels). Der Modus
 bleibt deshalb opt-in (Chat-Schalter „Prüfen“), der Default bleibt der lineare Pfad.
+**Exp 11b** (Grader nur als Retry-Auslöser, Treffer mischen statt filtern): der Schaden ist weg,
+ein Nutzen aber nicht messbar (Faithfulness 0.449 vs. 0.448, gepaart 3:1:27) — bei 2,3-facher
+Antwortzeit. Ist CRAG eingeschaltet, nutzt es diese unschädliche Variante (`CRAG_STRATEGY=trigger`).
 
 ![Exp 11](results/crag_experiment.png)
 
@@ -230,7 +233,7 @@ Git Flow: `main` (stabil) ← `develop` (Integration) ← `feature/*`. Commits a
   in `eval/RESULTS.md`.
 - **Corrective RAG** (`backend/app/flow/`, LangGraph, opt-in `CRAG_ENABLED` + Chat-Schalter):
   **Exp 11 negativ** — ein per Prompt gesteuerter 7B-Grader filtert zu viele richtige Passagen weg.
-  Nächster Versuch: Grader nur als Retry-Auslöser statt als Filter.
+  **Exp 11b neutral** (Grader nur als Retry-Auslöser: kein Schaden, kein Nutzen, 2,3 × Latenz).
 - Bewusst minimal (lokales Projekt): kein Auth/CORS/Rate-Limiting.
 - ~~Reranker in die `/chat`-Pipeline integrieren~~ ✅ umgesetzt (opt-in, s. o.).
 - ~~Ingestion-UI, Gruppen-Verwaltung, Modellwechsel-UI~~ ✅ umgesetzt.

@@ -82,6 +82,19 @@ def parse_grade(raw: str, n: int) -> list[int] | None:
     return out
 
 
+def interleave(rankings: list[list[Any]], limit: int) -> list[Any]:
+    """Mischt die Trefferlisten mehrerer Suchläufe reihum (1. von Lauf 1, 1. von Lauf 2, …),
+    ohne doppelte/überlappende Passagen. Mit nur einem Lauf = dessen Liste unverändert."""
+    merged: list[Any] = []
+    seen: set = set()
+    for rank in range(max((len(r) for r in rankings), default=0)):
+        for ranking in rankings:
+            if rank < len(ranking) and ranking[rank].id not in seen:
+                seen.add(ranking[rank].id)
+                merged.append(ranking[rank])
+    return dedup_overlaps(merged, limit)
+
+
 def _trace(state: CragState, node: str, t0: float, **detail: Any) -> list[dict]:
     return [*state.get("trace", []), {"node": node, "ms": round((time.perf_counter() - t0) * 1000), **detail}]
 
@@ -98,7 +111,14 @@ class CragNodes:
         grader_model: str | None = None,
         faithfulness=None,
         temperature: float = 0.7,
+        strategy: str = "filter",
     ) -> None:
+        # filter  (Exp 11):  nur als relevant bewertete Passagen gehen in den Prompt.
+        # trigger (Exp 11b): der Grader entscheidet nur über den Retry; in den Prompt gehen die
+        #                    ungefilterten Trefferlisten (bei Retry reihum gemischt).
+        if strategy not in ("filter", "trigger"):
+            raise ValueError(f"unbekannte CRAG-Strategie: {strategy}")
+        self.strategy = strategy
         self._ollama = ollama
         self._vectors = vectors
         self._embed_model = embed_model
@@ -124,6 +144,7 @@ class CragNodes:
         fresh = dedup_overlaps([*relevant, *fresh], len(relevant) + len(fresh))[len(relevant):]
         return {
             "queries": queries,
+            "rankings": [*state.get("rankings", []), points],
             "attempts": state.get("attempts", 0) + 1,
             "candidates": fresh,
             "trace": _trace(state, "retrieve", t0, query=queries[-1], n_new=len(fresh)),
@@ -198,8 +219,11 @@ class CragNodes:
         if retry:
             regen += 1
             writer({"event": "reset", "reason": "unsupported"})
-        # Relevante Passagen in Score-Reihenfolge, max. top_k (Prompt-Budget wie Baseline).
-        context = sorted(state.get("relevant", []), key=lambda p: p.score, reverse=True)[: state["top_k"]]
+        if self.strategy == "trigger":
+            context = interleave(state.get("rankings", []), state["top_k"])
+        else:
+            # Relevante Passagen in Score-Reihenfolge, max. top_k (Prompt-Budget wie Baseline).
+            context = sorted(state.get("relevant", []), key=lambda p: p.score, reverse=True)[: state["top_k"]]
         messages = build_messages(
             state["question"], context, state.get("history"),
             system_extra=STRICT_EXTRA if retry else None,
