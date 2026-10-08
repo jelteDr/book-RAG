@@ -44,9 +44,12 @@ _GRADE_SYSTEM = (
 
 _REWRITE_SYSTEM = (
     "Die bisherigen Suchanfragen haben in einem Buch keine passenden Passagen gefunden. "
-    "Formuliere EINE neue Suchanfrage, die so klingt wie die gesuchte Textstelle selbst "
-    "(konkrete Namen, Orte, Handlungen, Schlüsselwörter statt Fragewörter). Sie muss sich "
-    "von den bisherigen Anfragen unterscheiden. Gib NUR die Suchanfrage aus."
+    "Schreibe KEINE Frage, sondern eine Stichwort-Suchanfrage, die nach der gesuchten "
+    "Textstelle selbst klingt: konkrete Namen, Orte, Gegenstände, Handlungen. Sie muss sich "
+    "deutlich von den bisherigen Anfragen unterscheiden. Gib NUR die Suchanfrage aus.\n"
+    # Beispiel bewusst aus keinem Buch im Bestand/Gold-Set (sonst Leakage ins Eval).
+    "Beispiel: Frage 'Warum heuert Ishmael auf der Pequod an?' -> "
+    "'Ishmael Nantucket Walfang Pequod anheuern Kapitän Ahab Vertrag'"
 )
 
 STRICT_EXTRA = (
