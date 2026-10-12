@@ -659,6 +659,23 @@ der Repo-Default bleibt `CRAG_ENABLED=false`. Der größere Hebel bleibt laut Ex
 Passagen (`TOP_K` 4–6). Ein trainierter Evaluator wie im Original-Paper wäre der nächste ernsthafte
 Versuch, liegt aber außerhalb des lokalen 7B-Rahmens.
 
+## Ablation — Vorher/Nachher je Pipeline-Stufe (`eval/ablation.py`)
+
+**Anlass:** Die Einzelbefunde (Exp 4/5/7/10) stammen aus verschiedenen Messepochen
+(Kapitel- vs. Span-Metrik, n=21 vs. 36, teils mit abgeschnittenem Kontext). Die Ablation misst
+alle Stufen **kumulativ in einem Lauf** unter identischen Bedingungen (Gold v2, n=36,
+qwen2.5:7b, temp 0, num_ctx 16384): S0 naiv (reine Text-Embeddings in `book_chunks_plain`,
+keine Dedup, k=8) → S1 +Dedup → S2 +Contextual → S3 k=6 → S4 +Small-to-Big (window 1, top 3).
+Stufen laufen nacheinander über alle Fragen (Prefix-Cache-fair, Lehre aus Exp 11).
+
+**Vorab festgelegt:**
+- **Reproduzierbarkeit:** S2 muss die Exp-10-Werte für k=8 (Faithfulness 0.448, Hit 0.812,
+  MRR 0.474), S3 die für k=6 (0.505 / 0.781 / 0.469) exakt treffen (gleicher Codepfad, temp 0).
+- **Erwartung je Schritt:** Dedup Hit/MRR ↑ (Exp 4); Contextual Hit/MRR ↑ (Exp 5, span +0.054
+  MRR); k=6 Faithfulness ↑, Hit leicht ↓ (Exp 10); Small-to-Big MRR/Hit ↑, Prompt deutlich länger,
+  Faithfulness offen (nie mit Antwort-Suite gemessen).
+- Hit für S4 zählt den erweiterten Bereich (wie Exp 7) — großzügiger als bei S0–S3.
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
