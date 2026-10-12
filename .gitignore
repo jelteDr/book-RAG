@@ -52,3 +52,4 @@ reports/
 /results/global_graph_*.jsonl
 /results/crag_answers.jsonl
 /results/ablation_answers.jsonl
+/results/ablation_judge.jsonl

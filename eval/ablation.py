@@ -30,6 +30,7 @@ import argparse
 import asyncio
 import json
 import math
+import re
 import sys
 import time
 from pathlib import Path
@@ -51,6 +52,26 @@ from app.util import l2_normalize  # noqa: E402
 
 PLAIN = "book_chunks_plain"
 CKPT = ROOT / "results" / "ablation_answers.jsonl"
+JUDGE_CKPT = ROOT / "results" / "ablation_judge.jsonl"  # nur Urteile (JA/NEIN), kein Text
+
+# Korrektheit per LLM-Judge (post hoc ergänzt): Faithfulness misst Stützung durch die
+# Passagen, nicht ob die Antwort STIMMT — eine Antwort kann eng an einer falschen Passage
+# kleben. NLI (Antwort => Gold) war dafür unbrauchbar (korrekte Paraphrasen ~0,02).
+JUDGE_PROMPT = (
+    "Frage: {question}\n\nReferenzantwort: {gold}\n\nZu bewertende Antwort: {answer}\n\n"
+    "Trifft die zu bewertende Antwort die Kernaussage der Referenzantwort? Andere Formulierung "
+    "oder zusätzliche Details sind in Ordnung; fehlt die Kernaussage oder widerspricht die "
+    "Antwort ihr, dann nicht. Antworte NUR mit JA oder NEIN."
+)
+
+
+async def judge(ollama: OllamaClient, model: str, question: str, gold: str, answer: str) -> bool:
+    clean = re.sub(r"\s*\[\d+\]", "", answer)
+    out = await ollama.complete(
+        [{"role": "user", "content": JUDGE_PROMPT.format(question=question, gold=gold, answer=clean)}],
+        model, temperature=0.0, max_tokens=3,
+    )
+    return out.strip().upper().startswith("JA")
 
 STAGES = [
     {"key": "S0", "label": "naiv", "collection": PLAIN, "dedup": False, "k": 8, "s2b": False},
@@ -98,6 +119,10 @@ async def stage_points(stage: dict, question: str, *, ollama, stores: dict, grou
     return pts
 
 
+def answerable_items(gold: list[dict]) -> list[dict]:
+    return [it for it in gold if it.get("qtype") != "unanswerable"]
+
+
 def sign_test(better: int, worse: int) -> float:
     n = better + worse
     if n == 0:
@@ -113,29 +138,34 @@ def plot(summary: list[dict], path: Path) -> None:
 
     labels = [f"{s['key']}\n{s['label']}" for s in summary]
     x = range(len(summary))
-    # Kategoriale Slots 1-3 (dataviz-Referenzpalette, validiert); Werte stehen als Label dran.
-    series = [("faithfulness", "Faithfulness", "#2a78d6"), ("hit", "Gold im Prompt (Hit)", "#eb6834"),
-              ("mrr", "MRR", "#1baf7a")]
+    # Kategoriale Slots 1-4 (dataviz-Referenzpalette, validiert); Werte stehen als Label dran.
+    series = [("correct", "Korrekt (Judge)", "#2a78d6"), ("faithfulness", "Faithfulness (NLI)", "#eb6834"),
+              ("hit", "Gold im Prompt (Hit)", "#1baf7a"), ("mrr", "MRR", "#eda100")]
     fig, (ax, ax2) = plt.subplots(1, 2, figsize=(13, 4.2), gridspec_kw={"width_ratios": [2.2, 1]})
     for key, name, color in series:
         ys = [s[key] for s in summary]
         ax.plot(x, ys, color=color, linewidth=2, marker="o", markersize=7,
                 markeredgecolor="white", markeredgewidth=2, label=name)
-        for xi, y in zip(x, ys):
-            ax.annotate(f"{y:.2f}", (xi, y), textcoords="offset points", xytext=(0, 8),
-                        ha="center", fontsize=8, color="#333333")
+        # Selektive Labels: nur Start und Ende (alle Werte stehen in der Tabelle/RESULTS.md).
+        for xi in (0, len(ys) - 1):
+            ax.annotate(f"{ys[xi]:.2f}", (xi, ys[xi]), textcoords="offset points",
+                        xytext=(-14 if xi == 0 else 14, 0), ha="right" if xi == 0 else "left",
+                        va="center", fontsize=8, color="#333333")
     ax.set_xticks(list(x), labels, fontsize=8)
+    ax.set_xlim(-0.5, len(summary) - 0.5)
     ax.set_ylim(0, 1.05)
     ax.set_title("Qualität je Stufe (kumulativ)", fontsize=10, color="#333333")
-    ax.legend(frameon=False, fontsize=8, loc="lower right")
-    e2e = [s["e2e_median_s"] for s in summary]
-    bars = ax2.bar(list(x), e2e, color="#9aa0a6", width=0.65, edgecolor="white", linewidth=2)
-    for b, v in zip(bars, e2e):
+    ax.legend(frameon=False, fontsize=8, loc="upper center", ncol=4, bbox_to_anchor=(0.5, -0.14))
+    # Kosten deterministisch als Prompt-Länge: die Wanduhr-Latenz schwankte im Lauf stark
+    # (S1 und S2 haben dieselbe Prompt-Größe, aber 27 s vs. 42 s) und taugt nicht als Vergleich.
+    chars = [s["prompt_chars"] / 1000 for s in summary]
+    bars = ax2.bar(list(x), chars, color="#9aa0a6", width=0.65, edgecolor="white", linewidth=2)
+    for b, v in zip(bars, chars):
         ax2.annotate(f"{v:.1f}", (b.get_x() + b.get_width() / 2, v), textcoords="offset points",
                      xytext=(0, 2), ha="center", fontsize=8, color="#333333")
     ax2.set_xticks(list(x), [s["key"] for s in summary], fontsize=8)
-    ax2.set_ylim(0, max(e2e) * 1.2)
-    ax2.set_title("Antwortzeit, Median (s)", fontsize=10, color="#333333")
+    ax2.set_ylim(0, max(chars) * 1.2)
+    ax2.set_title("Prompt-Länge (Tsd. Zeichen Quellen)", fontsize=10, color="#333333")
     for a in (ax, ax2):
         a.spines[["top", "right", "left"]].set_visible(False)
         a.tick_params(axis="y", labelsize=8, colors="#777777")
@@ -208,6 +238,31 @@ async def main() -> None:
                     ck.flush()
                     done[(stage["key"], item["id"])] = r
                     print(f"  {item['id']} {r['e2e_ms'] / 1000:5.1f}s refused={is_refusal(r['answer'])}")
+
+        # Judge: Korrektheit je beantworteter, beantwortbarer Antwort + Kalibrierung.
+        verdicts: dict[str, bool] = {}
+        if JUDGE_CKPT.exists():
+            for line in JUDGE_CKPT.read_text().splitlines():
+                v = json.loads(line)
+                verdicts[v["key"]] = v["ja"]
+        answerable = answerable_items(gold)
+        jobs = [(f"{st['key']}:{it['id']}", it, done[(st["key"], it["id"])]["answer"])
+                for st in stages for it in answerable
+                if not is_refusal(done[(st["key"], it["id"])]["answer"])]
+        # Kalibrierung: Referenz gegen sich selbst (soll JA) und gegen die Referenz der
+        # nächsten Frage (soll NEIN).
+        for i, it in enumerate(answerable):
+            other = answerable[(i + 1) % len(answerable)]
+            jobs.append((f"cal_pos:{it['id']}", it, it["answer"]))
+            jobs.append((f"cal_neg:{it['id']}", it, other["answer"]))
+        print(f"\nJudge: {sum(1 for k, *_ in jobs if k not in verdicts)} offene Urteile …")
+        with JUDGE_CKPT.open("a") as jk:
+            for key, it, ans in jobs:
+                if key in verdicts:
+                    continue
+                verdicts[key] = await judge(ollama, args.model, it["question"], it["answer"], ans)
+                jk.write(json.dumps({"key": key, "ja": verdicts[key]}) + "\n")
+                jk.flush()
     finally:
         await ollama.aclose()
         for s in stores.values():
@@ -232,7 +287,10 @@ async def main() -> None:
                 row["hit"] = 1.0 if first else 0.0
                 row["mrr"] = 1.0 / first if first else 0.0
             if item.get("qtype") != "unanswerable" and not refused:
-                row["faithfulness"] = faith.score(r["answer"], [c.get("text", "") for c in r["context"]])
+                chunks = [c.get("text", "") for c in r["context"]]
+                row["faithfulness"] = faith.score(r["answer"], chunks)  # gefenstert (korrekt)
+                row["faithfulness_trunc"] = faith.score(r["answer"], chunks, windowed=False)
+                row["correct"] = 1.0 if verdicts[f"{stage['key']}:{item['id']}"] else 0.0
                 row["rougeL"] = rs.score(item["answer"], r["answer"])["rougeL"].fmeasure
                 row["answer_f1"] = token_f1(r["answer"], item["answer"])
             rows.append(row)
@@ -249,7 +307,11 @@ async def main() -> None:
         e2e = sorted(x["e2e_ms"] for x in xs)
         summary.append({
             "key": stage["key"], "label": stage["label"],
-            "faithfulness": mean(ans, "faithfulness"), "rougeL": mean(ans, "rougeL"),
+            "faithfulness": mean(ans, "faithfulness"),
+            "faithfulness_trunc": mean(ans, "faithfulness_trunc"),
+            # Korrekt-Rate über ALLE beantwortbaren Fragen (Verweigerung = nicht korrekt).
+            "correct": sum(x.get("correct", 0.0) for x in ans) / len(ans),
+            "rougeL": mean(ans, "rougeL"),
             "answer_f1": mean(ans, "answer_f1"), "hit": mean(ans, "hit"), "mrr": mean(ans, "mrr"),
             "refusal_rate": sum(x["refused"] for x in una) / len(una) if una else float("nan"),
             "false_refusal_rate": sum(x["refused"] for x in ans) / len(ans),
@@ -258,29 +320,42 @@ async def main() -> None:
 
     steps = []
     for prev, cur in zip(stages, stages[1:]):
-        a = {r["id"]: r.get("faithfulness") for r in rows if r["stage"] == cur["key"]}
-        b = {r["id"]: r.get("faithfulness") for r in rows if r["stage"] == prev["key"]}
-        both = [i for i in a if a[i] is not None and b.get(i) is not None]
-        better = sum(a[i] > b[i] + 1e-9 for i in both)
-        worse = sum(a[i] < b[i] - 1e-9 for i in both)
-        steps.append({"step": f"{prev['key']}->{cur['key']}", "n": len(both), "better": better,
-                      "worse": worse, "same": len(both) - better - worse,
-                      "p_sign": round(sign_test(better, worse), 3)})
+        step = {"step": f"{prev['key']}->{cur['key']}"}
+        for key in ("faithfulness", "correct"):
+            a = {r["id"]: r.get(key) for r in rows if r["stage"] == cur["key"]}
+            b = {r["id"]: r.get(key) for r in rows if r["stage"] == prev["key"]}
+            both = [i for i in a if a[i] is not None and b.get(i) is not None]
+            better = sum(a[i] > b[i] + 1e-9 for i in both)
+            worse = sum(a[i] < b[i] - 1e-9 for i in both)
+            step[key] = {"n": len(both), "better": better, "worse": worse,
+                         "same": len(both) - better - worse,
+                         "p_sign": round(sign_test(better, worse), 3)}
+        steps.append(step)
 
     print(f"\n=== Ablation (n={len(gold)}, Modell={args.model}) ===")
-    print(f"{'Stufe':<18} {'Faith':>6} {'ROUGE':>6} {'F1':>6} {'Refus':>6} {'FalseR':>6} "
+    print(f"{'Stufe':<18} {'Faith':>6} {'F_alt':>6} {'Korrekt':>7} {'ROUGE':>6} {'F1':>6} {'Refus':>6} {'FalseR':>6} "
           f"{'Hit':>6} {'MRR':>6} {'Zeichen':>8} {'e2e':>6}")
     for s in summary:
-        print(f"{s['key'] + ' ' + s['label']:<18} {s['faithfulness']:6.3f} {s['rougeL']:6.3f} "
+        print(f"{s['key'] + ' ' + s['label']:<18} {s['faithfulness']:6.3f} "
+              f"{s['faithfulness_trunc']:6.3f} {s['correct']:7.3f} {s['rougeL']:6.3f} "
               f"{s['answer_f1']:6.3f} {s['refusal_rate']:6.2f} {s['false_refusal_rate']:6.2f} "
               f"{s['hit']:6.3f} {s['mrr']:6.3f} {s['prompt_chars']:8.0f} {s['e2e_median_s']:5.1f}s")
-    print("\nPaired Faithfulness je Schritt (besser:schlechter:gleich):")
+    print("\nPaired je Schritt (besser:schlechter:gleich):")
     for st in steps:
-        print(f"  {st['step']}: {st['better']}:{st['worse']}:{st['same']} (n={st['n']}, p={st['p_sign']})")
+        f, c = st["faithfulness"], st["correct"]
+        print(f"  {st['step']}: Faith {f['better']}:{f['worse']}:{f['same']} (p={f['p_sign']})  "
+              f"Korrektheit {c['better']}:{c['worse']}:{c['same']} (p={c['p_sign']})")
+
+    cal = {
+        "pos_ja_rate": mean([{"v": float(verdicts[f"cal_pos:{it['id']}"])} for it in answerable_items(gold)], "v"),
+        "neg_ja_rate": mean([{"v": float(verdicts[f"cal_neg:{it['id']}"])} for it in answerable_items(gold)], "v"),
+    }
+    print(f"Judge-Kalibrierung: Referenz=JA {cal['pos_ja_rate']:.2f} (soll 1), "
+          f"fremde Referenz=JA {cal['neg_ja_rate']:.2f} (soll 0)")
 
     out = ROOT / "results" / "ablation.json"
     out.write_text(json.dumps({"model": args.model, "n": len(gold), "summary": summary,
-                               "steps": steps, "rows": rows}, indent=2))
+                               "steps": steps, "judge_calibration": cal, "rows": rows}, indent=2))
     if len(stages) == len(STAGES):
         plot(summary, ROOT / "results" / "ablation.png")
     print(f"\nErgebnis: {out}")

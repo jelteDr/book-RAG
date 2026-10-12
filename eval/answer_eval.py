@@ -147,13 +147,32 @@ class Faithfulness:
         probs = self.torch.softmax(logits, dim=-1)[0]
         return float(probs[self.ent_idx].cpu())
 
-    def score(self, answer: str, chunks: list[str], threshold: float = 0.5) -> float:
+    # Fenster für lange Prämissen: Passagen haben im Median ~630 Token, das Modell nimmt
+    # Prämisse + Satz nur bis 512 Token. Bis 2026-10-12 wurde still abgeschnitten (98-100 %
+    # der Passagen betroffen, Small-to-Big am stärksten; s. RESULTS.md Ablation). 380 Token je
+    # Fenster lassen Platz für den Satz, 50 % Überlappung, damit keine Belegstelle zerfällt.
+    WINDOW, STRIDE = 380, 190
+
+    def _windows(self, premise: str) -> list[str]:
+        ids = self.tok(premise, add_special_tokens=False)["input_ids"]
+        if len(ids) <= self.WINDOW:
+            return [premise]
+        starts = range(0, max(len(ids) - self.WINDOW, 0) + self.STRIDE, self.STRIDE)
+        return [self.tok.decode(ids[s : s + self.WINDOW]) for s in starts]
+
+    def _entail_windowed(self, premise: str, hypothesis: str) -> float:
+        return max(self._entail_prob(w, hypothesis) for w in self._windows(premise))
+
+    def score(self, answer: str, chunks: list[str], threshold: float = 0.5,
+              windowed: bool = True) -> float:
+        """`windowed=False` = alte, abgeschnittene Messung (nur für Vergleichbarkeit)."""
         sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", answer) if len(s.strip()) > 15]
         if not sentences:
             return 0.0
+        entail = self._entail_windowed if windowed else self._entail_prob
         supported = 0
         for sent in sentences:
-            best = max((self._entail_prob(c, sent) for c in chunks[:5]), default=0.0)
+            best = max((entail(c, sent) for c in chunks[:5]), default=0.0)
             if best >= threshold:
                 supported += 1
         return supported / len(sentences)
