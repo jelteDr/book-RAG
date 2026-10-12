@@ -53,3 +53,5 @@ reports/
 /results/crag_answers.jsonl
 /results/ablation_answers.jsonl
 /results/ablation_judge.jsonl
+/results/model_answers.jsonl
+/results/model_judge.jsonl

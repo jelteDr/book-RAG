@@ -728,6 +728,25 @@ Faithfulness-Messung) — exakt wie Exp 10.
 **Nächster Hebel:** Modellvergleich auf derselben Suite (gleiche Retrieval-Stufe S4, anderes
 Generierungsmodell), da die Retrieval-Seite ausgereizter ist als die Generierung.
 
+## Modellvergleich — gleiches Retrieval, anderes Generierungsmodell (`eval/model_compare.py`)
+
+**Anlass:** Die Ablation zeigte, dass die Generierung der Engpass ist (Gold-Passage in ~80 % der
+Prompts, aber nur ~1/3 korrekte Antworten). Hier bleibt das Retrieval fest (S4: Contextual +
+Dedup, k=6, Small-to-Big), jede Frage bekommt exakt denselben Kontext; nur das Modell wechselt.
+
+**Vorab festgelegt:**
+- Modelle (lokal, 4-Bit): qwen2.5:7b (Baseline), llama3.1:8b, qwen3:8b (Thinking aus),
+  mistral 7b, gemma4, qwen2.5:14b. temp 0, num_ctx 16384.
+- **Korrektheit** mit zwei Judges (Haupt: qwen2.5:14b, Gegenprobe: qwen2.5:7b), je mit
+  Kalibrierung (Referenz/fremde Referenz) und Übereinstimmung (Kappa). Bekannter Bias: ein Judge
+  kann Antworten der eigenen Familie/des eigenen Modells bevorzugen — deshalb zwei Judges.
+- **Sanity:** qwen2.5:7b mit Judge 7b muss die Ablation-S4-Korrektheit (0.344) und
+  -Faithfulness (0.702) exakt treffen.
+- **H-Modell:** qwen2.5:14b erreicht ≥ +0,10 Korrektheit ggü. qwen2.5:7b (beide Judges).
+- **Erwartung:** mistral hält den Zitat-Contract kaum ein (frühere Beobachtung) → niedrige
+  Zitatquote; gemma4 langsam (frühere TTFT ~55 s).
+- Latenz ist hier eine echte Modelleigenschaft und wird berichtet (Lauf ohne parallele Last).
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
