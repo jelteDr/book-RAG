@@ -53,11 +53,15 @@ _SENT_RE = re.compile(r"(?<=[.!?])\s+")
 _CITE_RE = re.compile(r"\[\d+\]")
 
 
-def prepare(messages: list[dict], model: str) -> list[dict]:
-    """qwen3 denkt sonst laut (lange <think>-Blöcke) — für den Vergleich abgeschaltet."""
-    if model.startswith("qwen3"):
-        messages = [*messages[:-1], {**messages[-1], "content": messages[-1]["content"] + " /no_think"}]
-    return messages
+# Thinking-Modelle (qwen3, gemma4) denken sonst vor der Antwort: TTFT ~50 s, und die versteckten
+# Denk-Token blähen die TPS auf. Fair = alle ohne Denken. `/no_think` und `think: false` wirken
+# über /v1 nicht (getestet, Ollama 0.34), `reasoning_effort: "none"` schon.
+NO_THINK = {"reasoning_effort": "none"}
+THINKING = ("qwen3", "gemma4")
+
+
+def gen_extra(model: str) -> dict | None:
+    return NO_THINK if model.startswith(THINKING) else None
 
 
 def citation_rate(answer: str) -> float:
@@ -164,8 +168,8 @@ async def main() -> None:
                 print(f"\n--- {model} (Kontext {ctx}) ---")
                 for item in todo:
                     pts = contexts[item["id"]]
-                    msgs = prepare(build_messages(item["question"], pts), model)
-                    gen = await generate(ollama, msgs, model)
+                    gen = await generate(ollama, build_messages(item["question"], pts), model,
+                                         extra=gen_extra(model))
                     answer = _THINK_RE.sub("", gen["answer"]).strip()
                     r = {"model": model, "id": item["id"], "answer": answer,
                          "ttft_ms": gen["ttft_ms"], "e2e_ms": gen["e2e_ms"], "tps": gen["tps"],

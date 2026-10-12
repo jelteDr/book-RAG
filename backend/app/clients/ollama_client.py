@@ -48,6 +48,7 @@ class OllamaClient:
         messages: list[dict],
         model: str,
         temperature: float = 0.7,
+        extra: dict | None = None,
     ) -> AsyncIterator[str]:
         """Streamt die rohen SSE-Zeilen der Chat-Completion (OpenAI-kompatibel).
 
@@ -60,6 +61,9 @@ class OllamaClient:
             "stream": True,
             "temperature": temperature,
             "stream_options": {"include_usage": True},
+            # z. B. {"reasoning_effort": "none"}: schaltet bei Thinking-Modellen (qwen3, gemma4)
+            # das Denken ab — bei Ollama 0.34 wirkt nur dieser Parameter über /v1.
+            **(extra or {}),
         }
         async with self._client.stream(
             "POST", "/v1/chat/completions", json=payload
