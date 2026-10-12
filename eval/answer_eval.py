@@ -85,12 +85,14 @@ def token_f1(pred: str, gold: str) -> float:
     return 2 * precision * recall / (precision + recall)
 
 
-async def generate(ollama: OllamaClient, messages: list[dict], model: str) -> dict:
+async def generate(
+    ollama: OllamaClient, messages: list[dict], model: str, extra: dict | None = None
+) -> dict:
     t0 = time.perf_counter()
     ttft = None
     usage: dict = {}
     parts: list[str] = []
-    async for line in ollama.chat_stream(messages, model, temperature=0.0):
+    async for line in ollama.chat_stream(messages, model, temperature=0.0, extra=extra):
         if not line.startswith("data:"):
             continue
         data = line[len("data:"):].strip()

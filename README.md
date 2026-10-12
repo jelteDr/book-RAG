@@ -113,10 +113,30 @@ num_ctx 16384). Reproduzierbarkeit geprüft: S2/S3 treffen die Exp-10-Werte exak
   richtige Passage im Prompt steht, ist nur etwa jede dritte Antwort korrekt.** Der Engpass ist
   nicht mehr das Retrieval, sondern das 7B-Generierungsmodell — der nächste Hebel ist das Modell,
   nicht eine weitere Retrieval-Technik.
+- **Modellvergleich bestätigt das** (`make eval-models`, gleiches Retrieval, 6 lokale Modelle):
+  ein anderes Generierungsmodell bringt bis zu +0,25 Korrektheit — mehr als alle Retrieval-Stufen
+  zusammen. Aber jedes Modell hat einen Haken (siehe unten); Default bleibt qwen2.5:7b.
 - **Messfehler gefunden und behoben:** Die NLI-Faithfulness schnitt Passagen bei 512 Token ab
   (98–100 % betroffen); Small-to-Big fiel dadurch scheinbar auf 0.34. Gefenstert gemessen liegt
   es bei 0.70. Faithfulness-Zahlen aus Exp 10/11 (unten) sind noch abgeschnitten gemessen —
   innerhalb eines Experiments vergleichbar, absolut zu niedrig.
+
+### Modellvergleich: gleiches Retrieval, anderes Generierungsmodell
+
+![Modellvergleich](results/model_compare.png)
+
+| Modell | Korrekt (Judge 14b / 7b) | Zitatquote | Unbeantwortbar verweigert | Fälschlich verweigert | Antwortzeit |
+|---|---|---|---|---|---|
+| **qwen2.5:7b** (Default) | 0.22 / 0.34 | 0.81 | 3/4 | 0 | **17 s** |
+| llama3.1:8b | 0.41 / **0.47** | 0.52 | **4/4** | 0 | 57 s |
+| qwen3:8b | 0.28 / 0.44 | **0.83** | **4/4** | 6/32 | 57 s |
+| mistral 7b | 0.19 / 0.34 | 0.72 | 2/4 | 1/32 | 46 s |
+| gemma4 | 0.25 / 0.31 | **0.83** | **4/4** | 1/32 | 21 s |
+| qwen2.5:14b | **0.47 / 0.47** | 0.72 | 1/4 | 1/32 | 84 s |
+
+Kein Modell gewinnt überall: qwen2.5:14b ist am korrektesten, erfindet aber eher Antworten auf
+Unbeantwortbares und ist 5× langsamer; llama3.1:8b zitiert nur jeden zweiten Satz. Zwei Judges
+(Kappa 0.39) — Korrektheit als Tendenz lesen. Details: `eval/RESULTS.md`.
 
 ### Was ich untersucht habe (und was die Daten *wirklich* sagen)
 
