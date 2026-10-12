@@ -92,11 +92,11 @@ def plot(summary: list[dict], path: Path) -> None:
     panels = [("correct", "Korrekt (Judge qwen2.5:14b)", "{:.2f}", 1.0),
               ("faithfulness", "Faithfulness (NLI)", "{:.2f}", 1.0),
               ("citation_rate", "Zitatquote (Sätze mit [n])", "{:.2f}", 1.0),
-              ("e2e_median_s", "Antwortzeit Median (s)", "{:.0f}", None)]
+              ("e2e_clean_s", "Antwortzeit Median (s, ruhiges System)", "{:.0f}", None)]
     names = [short(s["model"]) for s in summary]
     fig, axes = plt.subplots(1, len(panels), figsize=(16, 4.2))
     for ax, (key, title, fmt, top) in zip(axes, panels):
-        vals = [s[key] for s in summary]
+        vals = [s.get(key, s.get("e2e_median_s")) for s in summary]
         bars = ax.bar(range(len(vals)), vals, color=colors[: len(vals)], width=0.7,
                       edgecolor="white", linewidth=2)
         for b, v in zip(bars, vals):
@@ -116,6 +116,43 @@ def plot(summary: list[dict], path: Path) -> None:
     fig.savefig(path, dpi=150)
 
 
+async def measure_latency(models: list[str], args) -> None:
+    """Im Hauptlauf schwankten die Zeiten durch Last (llama3.1:8b 9 tok/s < gemma4 16 tok/s).
+    Hier: ruhiges System, jedes Modell aufwärmen, dann N Fragen mit identischem Kontext."""
+    gold = [json.loads(x) for x in Path(args.gold).read_text().splitlines() if x.strip()][: args.latency]
+    ollama = OllamaClient(settings.ollama_base_url, timeout=600)
+    stores = {"prod": VectorStore(settings.qdrant_url, settings.qdrant_collection)}
+    out = {}
+    try:
+        contexts = {it["id"]: await stage_points(S4, it["question"], ollama=ollama, stores=stores,
+                                                 group=args.group) for it in gold}
+        for model in models:
+            await ollama.complete([{"role": "user", "content": "OK"}], model, max_tokens=1)
+            # Aufwärmen mit einem vollen RAG-Prompt (Prompt-Verarbeitung + Speicher warm).
+            await generate(ollama, build_messages(gold[0]["question"], contexts[gold[0]["id"]]),
+                           model, extra=gen_extra(model))
+            runs = [await generate(ollama, build_messages(it["question"], contexts[it["id"]]),
+                                   model, extra=gen_extra(model)) for it in gold]
+
+            def med(key: str, runs=runs) -> float:
+                return sorted(r[key] for r in runs)[len(runs) // 2]
+
+            out[model] = {"ttft_s": med("ttft_ms") / 1000, "e2e_s": med("e2e_ms") / 1000,
+                          "tps": med("tps"), "n": len(runs)}
+            print(f"{short(model):<14} TTFT {out[model]['ttft_s']:5.1f}s  e2e {out[model]['e2e_s']:5.1f}s"
+                  f"  TPS {out[model]['tps']:5.1f}")
+    finally:
+        await ollama.aclose()
+        await stores["prod"].aclose()
+    path = ROOT / "results" / "model_compare.json"
+    data = json.loads(path.read_text())
+    data["latency_clean"] = out
+    for s in data["summary"]:
+        if s["model"] in out:
+            s["e2e_clean_s"] = out[s["model"]]["e2e_s"]
+    path.write_text(json.dumps(data, indent=2))
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gold", default=str(ROOT / "eval" / "gold_v2.jsonl"))
@@ -123,12 +160,18 @@ async def main() -> None:
     ap.add_argument("--models", default=",".join(MODELS))
     ap.add_argument("--limit", type=int)
     ap.add_argument("--plot-only", action="store_true")
+    ap.add_argument("--latency", type=int, metavar="N",
+                    help="nur saubere Latenz nachmessen: erste N Fragen je Modell, nacheinander, "
+                         "nach Aufwärmen; schreibt latency_clean in model_compare.json")
     args = ap.parse_args()
     if args.plot_only:
         plot(json.loads((ROOT / "results" / "model_compare.json").read_text())["summary"],
              ROOT / "results" / "model_compare.png")
         return
     models = args.models.split(",")
+    if args.latency:
+        await measure_latency(models, args)
+        return
 
     gold = [json.loads(x) for x in Path(args.gold).read_text().splitlines() if x.strip()]
     if args.limit:

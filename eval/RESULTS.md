@@ -747,6 +747,49 @@ Dedup, k=6, Small-to-Big), jede Frage bekommt exakt denselben Kontext; nur das M
   Zitatquote; gemma4 langsam (frühere TTFT ~55 s).
 - Latenz ist hier eine echte Modelleigenschaft und wird berichtet (Lauf ohne parallele Last).
 
+**Vor dem Lauf behoben:** qwen3 und gemma4 „dachten“ vor jeder Antwort (TTFT ~50 s, versteckte
+Denk-Token blähten die TPS auf 160–200). `/no_think` und `think: false` wirken über Ollamas
+`/v1` (0.34) nicht; `reasoning_effort: "none"` schon (getestet) — für den Vergleich gesetzt.
+
+**Ergebnis** (n=36, 32 beantwortbar; identischer Kontext, Hit 0.781 bei allen Modellen):
+
+| Modell | Korrekt (Judge 14b) | Korrekt (Judge 7b) | Faithfulness | Zitatquote | Refusal (unansw.) | False-Refusal | ROUGE-L | e2e (ruhig) | TPS |
+|---|---|---|---|---|---|---|---|---|---|
+| qwen2.5:7b (Default) | 0.219 | 0.344 | 0.702 | 0.81 | 0.75 | **0.00** | **0.197** | **17 s** | **22.8** |
+| llama3.1:8b | 0.406 | **0.469** | 0.731 | 0.52 | **1.00** | **0.00** | 0.144 | 57 s | 8.4 |
+| qwen3:8b | 0.281 | 0.438 | 0.770 | **0.83** | **1.00** | 0.19 | 0.110 | 57 s | 9.2 |
+| mistral 7b | 0.188 | 0.344 | 0.706 | 0.72 | 0.50 | 0.03 | 0.189 | 46 s | 11.2 |
+| gemma4 | 0.250 | 0.312 | **0.774** | **0.83** | **1.00** | 0.03 | 0.148 | 21 s | 17.3 |
+| qwen2.5:14b | **0.469** | **0.469** | 0.759 | 0.72 | 0.25 | 0.03 | 0.165 | 84 s | 5.4 |
+
+Paired Korrektheit vs. qwen2.5:7b (besser:schlechter:gleich) — Judge 14b / Judge 7b:
+llama3.1:8b 9:3 (p 0.15) / 6:2 (p 0.29); qwen3 4:2 / 10:7; mistral 2:3 / 6:6; gemma4 5:4 / 5:6;
+**qwen2.5:14b 9:1 (p 0.021) / 7:3 (p 0.34)**.
+
+- **Sanity ✓:** qwen2.5:7b mit Judge 7b = 0.344, Faithfulness 0.702 — exakt Ablation S4.
+- **Judges:** Kalibrierung beide perfekt (Referenz 32/32 JA, fremde 0/32), Übereinstimmung
+  untereinander aber nur 0.72 (**Kappa 0.39**) — der 14b-Judge ist strenger (bewertet qwen2.5:7b
+  mit 0.22 statt 0.34). Korrektheit ist deshalb als Tendenz zu lesen.
+- **Latenz:** im Hauptlauf durch parallele Last verzerrt; mit `--latency 5` auf ruhigem System
+  nachgemessen (Spalte e2e/TPS). Alle Modelle laufen vollständig auf der GPU (`/api/ps`:
+  size = size_vram); warum llama3.1/qwen3/mistral nur 8–11 tok/s erreichen (qwen2.5:7b 23),
+  ist nicht untersucht.
+
+**Befund:**
+- **H-Modell erfüllt, aber nur eingeschränkt belastbar:** qwen2.5:14b liegt bei beiden Judges
+  ≥ +0,10 vorn (+0,25 / +0,13); signifikant nur mit dem 14b-Judge — der bewertet seine eigenen
+  Antworten (Selbstbevorzugung möglich).
+- **Bestätigt die Ablation:** Ein anderes Generierungsmodell bringt bis zu +0,25 Korrektheit —
+  mehr als alle Retrieval-Stufen zusammen (+0,09). Der Engpass liegt bei der Generierung.
+- **Kein Modell ist rundum besser — jedes hat einen Haken:** qwen2.5:14b beantwortet 3 von 4
+  unbeantwortbaren Fragen trotzdem (erfindet eher) und ist 5× langsamer; llama3.1:8b zitiert
+  nur in der Hälfte der Sätze (die App lebt von Zitaten); qwen3 verweigert 6 beantwortbare Fragen;
+  gemma4 ist schnell, gut verankert und ehrlich, aber nicht korrekter; mistral ist schwächer.
+- **Entscheidung:** qwen2.5:7b bleibt Default (schnell, zitiert zuverlässig, keine
+  False-Refusals). Wer Korrektheit über Tempo stellt: qwen2.5:14b oder llama3.1:8b im
+  Modell-Dropdown, mit den genannten Nachteilen. gemma4 ist die interessanteste Alternative für
+  „ehrlich + schnell“.
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
@@ -768,5 +811,6 @@ Dedup, k=6, Small-to-Big), jede Frage bekommt exakt denselben Kontext; nur das M
 9. ~~Exp 11 — Corrective RAG (LangGraph)~~ ✅ gemessen: negativ (Faithfulness 0.410 vs. 0.448,
    gegen dense4 6:14; Grader-Precision 0.22). ~~Exp 11b — Grader als Retry-Auslöser~~ ✅ neutral
    (Faithfulness 0.449 vs. 0.448, 3:1:27) bei 2,3 × Latenz; CRAG-Linie damit abgeschlossen.
-10. **Modellvergleich** (Ablation zeigt: Generierung ist der Engpass) — S4-Retrieval fix,
-   Generierungsmodell variieren (z. B. größere/andere 7–14B-Modelle, Speicher 24 GB beachten).
+10. ~~Modellvergleich~~ ✅ gemessen: qwen2.5:14b/llama3.1:8b bis +0,25 korrekter, aber mit
+   Haken (Halluzination bei Unbeantwortbarem bzw. halbe Zitatquote, 3–5× langsamer); Default bleibt
+   qwen2.5:7b. Offen: mehrere Judges/Mensch-Stichprobe, um Kappa 0.39 zu verbessern.
