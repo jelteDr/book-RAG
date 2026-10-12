@@ -659,6 +659,75 @@ der Repo-Default bleibt `CRAG_ENABLED=false`. Der größere Hebel bleibt laut Ex
 Passagen (`TOP_K` 4–6). Ein trainierter Evaluator wie im Original-Paper wäre der nächste ernsthafte
 Versuch, liegt aber außerhalb des lokalen 7B-Rahmens.
 
+## Ablation — Vorher/Nachher je Pipeline-Stufe (`eval/ablation.py`)
+
+**Anlass:** Die Einzelbefunde (Exp 4/5/7/10) stammen aus verschiedenen Messepochen
+(Kapitel- vs. Span-Metrik, n=21 vs. 36, teils mit abgeschnittenem Kontext). Die Ablation misst
+alle Stufen **kumulativ in einem Lauf** unter identischen Bedingungen (Gold v2, n=36,
+qwen2.5:7b, temp 0, num_ctx 16384): S0 naiv (reine Text-Embeddings in `book_chunks_plain`,
+keine Dedup, k=8) → S1 +Dedup → S2 +Contextual → S3 k=6 → S4 +Small-to-Big (window 1, top 3).
+Stufen laufen nacheinander über alle Fragen (Prefix-Cache-fair, Lehre aus Exp 11).
+
+**Vorab festgelegt:**
+- **Reproduzierbarkeit:** S2 muss die Exp-10-Werte für k=8 (Faithfulness 0.448, Hit 0.812,
+  MRR 0.474), S3 die für k=6 (0.505 / 0.781 / 0.469) exakt treffen (gleicher Codepfad, temp 0).
+- **Erwartung je Schritt:** Dedup Hit/MRR ↑ (Exp 4); Contextual Hit/MRR ↑ (Exp 5, span +0.054
+  MRR); k=6 Faithfulness ↑, Hit leicht ↓ (Exp 10); Small-to-Big MRR/Hit ↑, Prompt deutlich länger,
+  Faithfulness offen (nie mit Antwort-Suite gemessen).
+- Hit für S4 zählt den erweiterten Bereich (wie Exp 7) — großzügiger als bei S0–S3.
+
+**Ergebnis** (n=36; Faithfulness gefenstert, „F alt“ = bisherige abgeschnittene Messung;
+Korrekt = Anteil der beantwortbaren Fragen, die der Judge als korrekt wertet, Verweigerung = falsch):
+
+| Stufe | Hit | MRR | Faithfulness | F alt | Korrekt | ROUGE-L | F1 | Refusal | False-Ref. | Prompt-Zeichen |
+|---|---|---|---|---|---|---|---|---|---|---|
+| S0 naiv | 0.688 | 0.408 | 0.636 | 0.640 | 0.250 | 0.169 | 0.210 | 0.50 | 0.00 | 18 575 |
+| S1 +Dedup | 0.688 | 0.409 | 0.692 | 0.554 | 0.344 | 0.181 | 0.214 | 0.75 | 0.03 | 18 498 |
+| S2 +Contextual | **0.812** | 0.474 | 0.517 | 0.448 | 0.312 | 0.172 | 0.197 | 0.75 | 0.00 | 18 464 |
+| S3 k=6 | 0.781 | 0.469 | 0.639 | 0.505 | 0.281 | 0.185 | 0.217 | 0.75 | 0.00 | 13 947 |
+| S4 +Small-to-Big | 0.781 | **0.536** | **0.702** | 0.338 | **0.344** | 0.197 | 0.223 | 0.75 | 0.00 | 21 107 |
+
+Paired je Schritt (besser:schlechter:gleich): Faithfulness S0→S1 6:2:23, S1→S2 **6:16:9
+(p ≈ 0.05)**, S2→S3 13:7:12, S3→S4 11:5:16; Korrektheit 4:1:26, 6:7:18, 3:4:25, 4:2:26 (alle n.s.).
+
+**Reproduzierbarkeit ✓:** S2 = 0.448 / 0.812 / 0.474, S3 = 0.505 / 0.781 / 0.469 (alte
+Faithfulness-Messung) — exakt wie Exp 10.
+
+**Post hoc ergänzt (nach dem ersten Auswertungslauf, nicht vorab geplant):**
+1. **Faithfulness-Messfehler:** Die erste Auswertung zeigte fallende Faithfulness bis 0.338 bei
+   Small-to-Big. Ursache: mDeBERTa nimmt Prämisse + Satz nur bis 512 Token; Passagen haben im
+   Median ~630 Token (S4: ~1280), **98–100 % wurden abgeschnitten** — eine hinten liegende
+   Belegstelle zählte als „nicht gestützt“. Fix: Prämisse in überlappende Fenster (380 Token,
+   Schritt 190), Maximum je Satz (`answer_eval.Faithfulness`, Default ab jetzt). Mit Fenster:
+   S4 0.338 → 0.702. **Alle Faithfulness-Zahlen vor dieser Ablation (Metrik-Suite, Exp 10, 11,
+   11b) sind abgeschnitten gemessen** — innerhalb eines Experiments vergleichbar, absolut zu
+   niedrig; Längen-Effekte (k, Small-to-Big) sind dort systematisch zu pessimistisch. Der
+   Produktiv-Check (`FaithfulnessService`) hat denselben Fehler (Folgeaufgabe).
+2. **Korrektheit:** Faithfulness misst Stützung durch die Passagen, nicht ob die Antwort stimmt.
+   NLI (Antwort ⇒ Gold) war unbrauchbar (korrekte Paraphrasen ≈ 0,02) und wurde verworfen.
+   Stattdessen ein LLM-Judge (qwen2.5:7b, temp 0, „trifft die Kernaussage der Referenz?“).
+   Kalibrierung: Referenz gegen sich selbst 32/32 JA, gegen fremde Referenz 0/32 JA. Diese
+   Kontrollen sind leicht; Stichproben der NEIN-Urteile (d03, d05, d07, d08) waren berechtigt,
+   d02 eher zu streng. Selbstbewertung durch dasselbe Modell bleibt ein Bias.
+
+**Befund:**
+- **Retrieval-Stufen wirken wie erwartet:** Contextual hebt Hit (+0,12) und MRR, Small-to-Big
+  den MRR (+0,07), Dedup ist bei diesem Set neutral für Hit/MRR, k=6 kostet eine Frage Hit.
+- **Antwortqualität folgt kaum:** Korrekt 0,25 → 0,34 (Δ +0,09, kein Schritt signifikant).
+  **Konditional:** Steht die Gold-Passage im Prompt, ist die Antwort nur in 32–38 % der Fälle
+  korrekt (S0/S2/S3/S4); ohne Gold-Passage 0–14 % (S4: 43 %, n=7 — erweiterter Kontext enthält
+  die Info teils doch). **Der Engpass ist das 7B-Generierungsmodell, nicht das Retrieval.**
+- **Contextual senkt die Faithfulness** (S1→S2: 0.692 → 0.517, 6:16, p ≈ 0.05), ohne die
+  Korrektheit zu ändern. Hypothese (nicht geprüft): Kontext-Embeddings holen thematisch
+  passendere, aber für die Antwortformulierung weniger wörtlich nutzbare Passagen.
+- **Small-to-Big ist mit korrekter Messung die beste Stufe** (Faithfulness 0.70, MRR 0.54,
+  Korrekt 0.34) bei +51 % Prompt ggü. S3. Kandidat für den Default — nach Fix des Produktiv-Checks.
+- **Latenz:** Die Wanduhr-Zeiten schwankten stark (S1 27 s vs. S2 42 s bei gleicher Prompt-Größe)
+  und werden nicht interpretiert; Kosten = Prompt-Länge.
+
+**Nächster Hebel:** Modellvergleich auf derselben Suite (gleiche Retrieval-Stufe S4, anderes
+Generierungsmodell), da die Retrieval-Seite ausgereizter ist als die Generierung.
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
@@ -680,3 +749,5 @@ Versuch, liegt aber außerhalb des lokalen 7B-Rahmens.
 9. ~~Exp 11 — Corrective RAG (LangGraph)~~ ✅ gemessen: negativ (Faithfulness 0.410 vs. 0.448,
    gegen dense4 6:14; Grader-Precision 0.22). ~~Exp 11b — Grader als Retry-Auslöser~~ ✅ neutral
    (Faithfulness 0.449 vs. 0.448, 3:1:27) bei 2,3 × Latenz; CRAG-Linie damit abgeschlossen.
+10. **Modellvergleich** (Ablation zeigt: Generierung ist der Engpass) — S4-Retrieval fix,
+   Generierungsmodell variieren (z. B. größere/andere 7–14B-Modelle, Speicher 24 GB beachten).

@@ -81,15 +81,42 @@ make ingest               # Demo-Buch (Public Domain) ingesten
 
 ## Evaluation (der Kern)
 
-Alle Experimente sind reproduzierbar (`eval/`), gegen ein handgelabeltes Gold-Set
-(`eval/gold_dracula.jsonl`, **n=21**, Kapitel-Labels im Quelltext verankert). Volle Ergebnisse
-und Methodik-Caveats: [`eval/RESULTS.md`](eval/RESULTS.md). Ein **Gold-Set v2** mit
-passagen-genauen Span-Labels entsteht gerade in
-[`notebooks/gold_set_v2.ipynb`](notebooks/gold_set_v2.ipynb) (Labeling-Helfer auf der echten
-Pipeline-Suche, interaktive PCA-Karte des Embedding-Raums, Wortwolken).
+Alle Experimente sind reproduzierbar (`eval/`), gegen ein handgelabeltes **Gold-Set v2**
+(`eval/gold_v2.jsonl`, **n=36**: 26 Fakten-, 3 Paraphrase-, 3 Multi-Hop-, 4 unbeantwortbare
+Fragen) mit passagen-genauen Span-Labels, kuratiert in
+[`notebooks/gold_set_v2.ipynb`](notebooks/gold_set_v2.ipynb). Volle Ergebnisse, vorab notierte
+Hypothesen und Methodik-Caveats: [`eval/RESULTS.md`](eval/RESULTS.md).
 
-> **Ehrlichkeits-Hinweis:** n=21 ist ein Dev-Set ohne statistische Signifikanz — die Ergebnisse
-> sind Trends, keine belastbaren Rankings. „Recall@k" ist hier faktisch **Hit-Rate@k**.
+> **Ehrlichkeits-Hinweis:** n=36 aus einem Buch — die meisten Paarvergleiche sind nicht
+> signifikant; die Zahlen sind Trends, keine belastbaren Rankings.
+
+### Vorher/Nachher: was jede Pipeline-Stufe bringt (`make eval-ablation`)
+
+Alle Stufen kumulativ in **einem** Lauf unter identischen Bedingungen (qwen2.5:7b, temp 0,
+num_ctx 16384). Reproduzierbarkeit geprüft: S2/S3 treffen die Exp-10-Werte exakt.
+
+![Ablation](results/ablation.png)
+
+| Stufe | Gold im Prompt (Hit) | MRR | Faithfulness (NLI) | Korrekt (Judge) | Prompt (Zeichen) |
+|---|---|---|---|---|---|
+| S0 naiv (Text-Embeddings, k=8) | 0.69 | 0.41 | 0.64 | 0.25 | 18,6 k |
+| S1 +Overlap-Dedup | 0.69 | 0.41 | 0.69 | 0.34 | 18,5 k |
+| S2 +Contextual Retrieval | **0.81** | 0.47 | 0.52 | 0.31 | 18,5 k |
+| S3 k=6 | 0.78 | 0.47 | 0.64 | 0.28 | 13,9 k |
+| S4 +Small-to-Big | 0.78 | **0.54** | **0.70** | **0.34** | 21,1 k |
+
+**Was die Kurve zeigt:**
+- **Retrieval wird messbar besser:** Die antwort-tragende Passage steht in 81 statt 69 % der
+  Fragen im Prompt, die Rangposition (MRR) steigt von 0.41 auf 0.54 — vor allem durch
+  Contextual Retrieval und Small-to-Big.
+- **Die Antworten werden kaum besser:** Korrekt laut Judge 25 → 34 %, und selbst **wenn die
+  richtige Passage im Prompt steht, ist nur etwa jede dritte Antwort korrekt.** Der Engpass ist
+  nicht mehr das Retrieval, sondern das 7B-Generierungsmodell — der nächste Hebel ist das Modell,
+  nicht eine weitere Retrieval-Technik.
+- **Messfehler gefunden und behoben:** Die NLI-Faithfulness schnitt Passagen bei 512 Token ab
+  (98–100 % betroffen); Small-to-Big fiel dadurch scheinbar auf 0.34. Gefenstert gemessen liegt
+  es bei 0.70. Faithfulness-Zahlen aus Exp 10/11 (unten) sind noch abgeschnitten gemessen —
+  innerhalb eines Experiments vergleichbar, absolut zu niedrig.
 
 ### Was ich untersucht habe (und was die Daten *wirklich* sagen)
 

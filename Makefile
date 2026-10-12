@@ -6,7 +6,7 @@ BACKEND_PORT  ?= 8001
 
 .DEFAULT_GOAL := help
 .PHONY: help up up-ml down restart clean setup models ollama-host ollama-ctx ingest eval logs ps \
-	graph graph-build eval-graph graph-communities eval-global eval-crag
+	graph graph-build eval-graph graph-communities eval-global eval-crag eval-ablation
 
 help: ## Diese Übersicht anzeigen
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -92,6 +92,10 @@ eval-crag: ## Exp 11: Corrective RAG (LangGraph) vs. dense8/dense4 auf Gold v2 (
 	cd backend && uv run --with rouge-score --with transformers --with torch --with sentencepiece \
 		--with protobuf --with matplotlib python ../eval/crag_experiment.py \
 		--gold ../eval/gold_v2.jsonl --group "$(GROUP)"
+
+eval-ablation: ## Vorher/Nachher-Kurve: S0 naiv -> +Dedup -> +Contextual -> k=6 -> +Small-to-Big (~1 h)
+	cd backend && uv run --with rouge-score --with transformers --with torch --with sentencepiece \
+		--with protobuf --with matplotlib python ../eval/ablation.py --group "$(GROUP)"
 
 logs: ## Container-Logs folgen
 	docker compose logs -f
