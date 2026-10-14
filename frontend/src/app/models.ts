@@ -7,6 +7,8 @@ export interface Source {
   score: number;
   char_start: number | null;
   char_end: number | null;
+  /** Ungefähre Stelle im Buch in Prozent (Ersatz, wenn kein Kapitel erkannt wurde). */
+  position?: number | null;
   text: string;
   supported?: boolean; // optionaler Faithfulness-Check (NLI): stützt der Chunk die Aussage?
   support_score?: number;

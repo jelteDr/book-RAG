@@ -49,10 +49,12 @@ const sources = [
   { marker: 1, book_title: 'Dracula', chapter: 'CHAPTER II — Jonathan Harker’s Journal (continued)', score: 0.71, char_start: 100, char_end: 900, text: 'His face was a strong—a very strong—aquiline, with high bridge of the thin nose and peculiarly arched nostrils …', supported: true },
   { marker: 2, book_title: 'Dracula', chapter: 'CHAPTER III', score: 0.64, char_start: 1000, char_end: 1800, text: 'What manner of man is this, or what manner of creature is it in the semblance of man?', supported: false },
   { marker: 3, book_title: 'Dracula', chapter: 'CHAPTER I', score: 0.58, char_start: 5, char_end: 700, text: '' },
+  { marker: 4, book_title: 'A Storm of Swords', chapter: null, score: 0.51, char_start: 850000, char_end: 852000, position: 37, text: 'Jaime had been chained so long …' },
+  { marker: 5, book_title: 'Harry Potter and the Goblet of Fire', chapter: 'THE RIDDLE HOUSE', score: 0.55, char_start: 10, char_end: 2000, position: 0, text: 'The villagers of Little Hangleton …' },
 ];
 
 const answer =
-  'Der Graf wird als großer alter Mann mit markanter Adlernase beschrieben [1]. Harker zweifelt später, ob er überhaupt ein Mensch ist [2].\n\nSeine Ankunft im Schloss steht am Anfang des Tagebuchs [3].';
+  'Der Graf wird als großer alter Mann mit markanter Adlernase beschrieben [1]. Harker zweifelt später, ob er überhaupt ein Mensch ist [2].\n\nSeine Ankunft im Schloss steht am Anfang des Tagebuchs [3]. Vergleichbares findet sich auch anderswo [4][5].';
 
 const conversations = [
   { id: 1, title: 'Wie wird Graf Dracula beschrieben?', group_id: 'Horror', updated_at: '2026-09-20T10:00:00' },

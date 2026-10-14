@@ -171,13 +171,13 @@
                               : 'bg-surface-muted text-ink'
                         "
                         [attr.aria-pressed]="expanded() === s"
-                        [title]="s.supported === false ? 'Laut NLI nicht klar durch diese Quelle gestützt' : ''"
+                        [title]="sourceTooltip(s)"
                         (click)="toggleSource(s)"
                       >
                         @if (s.supported === false) {
                           <lucide-icon [img]="icons.TriangleAlert" [size]="12" aria-label="Nicht gestützt" class="shrink-0" />
                         }
-                        <span class="truncate">[{{ s.marker }}] {{ s.chapter }} · {{ s.score }}</span>
+                        <span class="truncate">[{{ s.marker }}] {{ sourceLabel(s) }}</span>
                       </button>
                     }
                   </div>
@@ -185,7 +185,7 @@
                 @if (expanded(); as ex) {
                   @if (msg.sources?.includes(ex)) {
                     <div class="mt-2 animate-rise rounded-xl bg-surface-muted px-3.5 py-2.5 text-[13px]">
-                      <strong>[{{ ex.marker }}] {{ ex.book_title }} — {{ ex.chapter }}</strong>
+                      <strong>[{{ ex.marker }}] {{ sourceHeading(ex) }}</strong>
                       @if (ex.text) {
                         <p class="mt-1.5 max-h-44 overflow-y-auto text-ink-muted">{{ ex.text }}</p>
                       } @else {

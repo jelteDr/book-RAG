@@ -48,6 +48,16 @@ function readCragPref(): boolean {
   }
 }
 
+/** „THE RIDDLE HOUSE“ -> „The Riddle House“, „CHAPTER XIX“ -> „Chapter XIX“ (römische Zahlen bleiben). */
+function prettyChapter(raw: string): string {
+  if (raw !== raw.toUpperCase()) return raw;
+  return raw
+    .toLowerCase()
+    .replace(/\b([a-z])([a-z'’]*)/g, (w, first: string, rest: string) =>
+      /^(?=[ivxlc])(c[md]|d?c{0,3})(x[cl]|l?x{0,3})(i[xv]|v?i{0,3})$/.test(w) ? w.toUpperCase() : first.toUpperCase() + rest,
+    );
+}
+
 @Component({
   selector: 'app-chat',
   standalone: true,
@@ -308,6 +318,26 @@ export class ChatComponent implements OnDestroy {
   }
 
   /** Millisekunden hübsch als Sekunden, z. B. 9358 -> "9,4 s". */
+  /** Chip-Text: Kapitel, sonst Buch + Position — nie der rohe Ähnlichkeitswert. */
+  sourceLabel(s: Source): string {
+    if (s.chapter) return prettyChapter(s.chapter);
+    const book = s.book_title ?? 'Quelle';
+    return s.position != null ? `${book} · bei ${s.position} %` : book;
+  }
+
+  /** Kopfzeile der aufgeklappten Quelle: Buch — Kapitel · Position. */
+  sourceHeading(s: Source): string {
+    const parts = [s.book_title ?? 'Quelle'];
+    if (s.chapter) parts.push(prettyChapter(s.chapter));
+    const head = parts.join(' — ');
+    return s.position != null ? `${head} · bei ${s.position} % des Buchs` : head;
+  }
+
+  sourceTooltip(s: Source): string {
+    const base = `${this.sourceHeading(s)} · Ähnlichkeit ${s.score.toFixed(2)}`;
+    return s.supported === false ? `${base} · laut NLI nicht klar durch diese Quelle gestützt` : base;
+  }
+
   fmtSecs(ms: number): string {
     return `${(ms / 1000).toFixed(1).replace('.', ',')} s`;
   }
