@@ -55,3 +55,4 @@ reports/
 /results/ablation_judge.jsonl
 /results/model_answers.jsonl
 /results/model_judge.jsonl
+/results/reingest_*.jsonl
