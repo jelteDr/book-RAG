@@ -13,6 +13,14 @@ from qdrant_client import models
 _CITE_RE = re.compile(r"\[(\d+)\]")
 
 
+def _position(payload: dict) -> int | None:
+    """Ungefähre Stelle im Buch in Prozent — Ersatzangabe für Bücher ohne erkannte Kapitel."""
+    start, total = payload.get("char_start"), payload.get("book_chars")
+    if start is None or not total:
+        return None
+    return min(100, round(100 * start / total))
+
+
 def extract_citations(answer: str, points: list[models.ScoredPoint]) -> list[dict]:
     used = sorted({int(n) for n in _CITE_RE.findall(answer)})
     valid = [n for n in used if 1 <= n <= len(points)]
@@ -29,6 +37,7 @@ def extract_citations(answer: str, points: list[models.ScoredPoint]) -> list[dic
                 "score": round(point.score, 4),
                 "char_start": payload.get("char_start"),
                 "char_end": payload.get("char_end"),
+                "position": _position(payload),
                 "text": payload.get("text"),
             }
         )

@@ -126,6 +126,12 @@ class VectorStore:
                 break
         return results
 
+    async def set_payload(self, ids: Sequence, payload: dict) -> None:
+        """Setzt/überschreibt einzelne Payload-Felder (Vektoren bleiben unverändert)."""
+        await self._client.set_payload(
+            collection_name=self._collection, payload=payload, points=list(ids)
+        )
+
     async def health(self) -> bool:
         """True, wenn Qdrant erreichbar ist."""
         try:

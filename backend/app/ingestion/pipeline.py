@@ -116,6 +116,8 @@ async def ingest_text(
                 "chunk_index": c.chunk_index,
                 "char_start": c.char_start,
                 "char_end": c.char_end,
+                # Buchlänge: erlaubt eine Positionsangabe („bei 37 %“), wenn kein Kapitel erkannt wurde.
+                "book_chars": len(cleaned),
                 **({"context": ctx} if ctx else {}),
             },
         }
