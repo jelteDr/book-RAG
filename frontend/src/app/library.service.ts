@@ -47,6 +47,18 @@ export class LibraryService {
     return this.json(`/api/groups/${groupId}/books`);
   }
 
+  /** Titel/Autor korrigieren; wirft mit der Backend-Meldung (z. B. „Titel darf nicht leer sein.“). */
+  async patchBook(id: number, body: { title?: string; author?: string }): Promise<Book> {
+    const resp = await fetch(`/api/books/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.detail ?? `Speichern fehlgeschlagen (${resp.status})`);
+    return data as Book;
+  }
+
   async deleteBook(id: number): Promise<void> {
     await fetch(`/api/books/${id}`, { method: 'DELETE' });
   }

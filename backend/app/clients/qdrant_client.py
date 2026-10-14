@@ -132,6 +132,16 @@ class VectorStore:
             collection_name=self._collection, payload=payload, points=list(ids)
         )
 
+    async def set_payload_for_book(self, book_id: str, payload: dict) -> None:
+        """Setzt Payload-Felder in ALLEN Chunks eines Buchs (z. B. korrigierter Titel)."""
+        await self._client.set_payload(
+            collection_name=self._collection,
+            payload=payload,
+            points=models.Filter(
+                must=[models.FieldCondition(key="book_id", match=models.MatchValue(value=book_id))]
+            ),
+        )
+
     async def health(self) -> bool:
         """True, wenn Qdrant erreichbar ist."""
         try:

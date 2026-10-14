@@ -35,6 +35,22 @@ def validate_document(cleaned: str) -> list[str]:
     return errors
 
 
+BOOK_FIELD_MAX_CHARS = 200
+
+
+def validate_book_field(value: str | None, label: str, *, required: bool) -> list[str]:
+    """Titel/Autor eines Buchs: nicht leer (falls Pflicht), Länge, keine Steuerzeichen."""
+    stripped = (value or "").strip()
+    if not stripped:
+        return [f"{label} darf nicht leer sein."] if required else []
+    errors = []
+    if len(stripped) > BOOK_FIELD_MAX_CHARS:
+        errors.append(f"{label} zu lang (maximal {BOOK_FIELD_MAX_CHARS} Zeichen).")
+    if _CONTROL_RE.search(stripped):
+        errors.append(f"{label} enthält ungültige Steuerzeichen.")
+    return errors
+
+
 def validate_question(question: str) -> list[str]:
     """Prüft eine Chat-Frage: Länge + keine Steuerzeichen."""
     errors: list[str] = []

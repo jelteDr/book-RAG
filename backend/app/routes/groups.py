@@ -13,6 +13,7 @@ from app.db.models import Book, Collection, CollectionMember, Group
 from app.db.session import session_factory
 from app.ingestion.pipeline import ingest_bytes
 from app.util import slugify
+from app.validation import validate_book_field
 
 router = APIRouter(tags=["groups"])
 
@@ -44,6 +45,11 @@ def _group_dict(g: Group, n_books: int | None = None) -> dict:
     if n_books is not None:
         d["n_books"] = n_books
     return d
+
+
+class BookPatch(BaseModel):
+    title: str | None = None
+    author: str | None = None
 
 
 def _book_dict(b: Book) -> dict:
@@ -167,6 +173,36 @@ async def delete_group(group_id: int, request: Request) -> dict:
         await session.delete(group)
         await session.commit()
         return {"deleted_group": group_id, "deleted_books": len(books)}
+
+
+@router.patch("/books/{book_id}")
+async def patch_book(book_id: int, patch: BookPatch, request: Request) -> dict:
+    """Titel/Autor korrigieren — in der DB UND in allen Chunks (Zitat-Chips lesen die Payload).
+
+    Bereits gespeicherte Chats behalten ihre damaligen Quellenangaben (persistiert mit dem Chat).
+    """
+    errors = []
+    if patch.title is not None:
+        errors += validate_book_field(patch.title, "Titel", required=True)
+    if patch.author is not None:
+        errors += validate_book_field(patch.author, "Autor", required=False)
+    if errors:
+        raise HTTPException(status_code=422, detail=" ".join(errors))
+    async with session_factory() as session:
+        book = await session.get(Book, book_id)
+        if not book:
+            raise HTTPException(status_code=404, detail="Buch nicht gefunden")
+        payload: dict = {}
+        if patch.title is not None:
+            book.title = payload["book_title"] = patch.title.strip()
+        if patch.author is not None:
+            book.author = payload["author"] = patch.author.strip() or None
+        if payload:
+            await request.app.state.vectors.set_payload_for_book(book.book_key, payload)
+            session.add(book)
+            await session.commit()
+            await session.refresh(book)
+        return _book_dict(book)
 
 
 @router.delete("/books/{book_id}")
