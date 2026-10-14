@@ -70,8 +70,9 @@ def _normalize(paragraph: str) -> str:
 def _heading_flags(paras: list[tuple[str, int]]) -> list[bool]:
     """Welche Absätze sind Kapitel-Überschriften?
 
-    Kapitel-Wort-Überschriften haben Vorrang. Nur Bücher OHNE solche Überschriften nutzen
-    Großbuchstaben-Überschriften — und auch die nur direkt nach einem Kapitel-Marker
+    Kapitel-Wort-Überschriften haben Vorrang (ab 3 Stück). Sonst gelten Großbuchstaben-
+    Überschriften — wenn sie sich als eigener Absatz wiederholen (POV-Namen), PROLOGUE/EPILOGUE
+    sind, oder direkt nach einem Kapitel-Marker
     (römische/arabische Zahl, Trennzeichen) oder einer wiederkehrenden Kopf-/Fußzeile
     („Page | 19 Harry Potter and the …“). So werden „DUDLEY DEMENTED“ (nach „I“) oder
     „THE SCAR“ (nach der Fußzeile) Kapitel, nicht aber „WHAM“ oder Zeitungsschlagzeilen
@@ -79,10 +80,17 @@ def _heading_flags(paras: list[tuple[str, int]]) -> list[bool]:
     „JONATHAN HARKER'S JOURNAL“ (Dracula, unter „CHAPTER I“) zu eigenen Kapiteln.
     """
     texts = [p for p, _ in paras]
-    if any(_is_heading(p) for p in texts):
-        return [_is_heading(p) for p in texts]
+    keyword = [_is_heading(p) for p in texts]
+    # Mind. 3: eine einzelne Titelzeile wie „Book Four: A Song of Ice and Fire …“ darf ein Buch
+    # nicht in den Kapitel-Wort-Modus zwingen (sonst hätte es genau ein Kapitel).
+    if sum(keyword) >= 3:
+        return keyword
     counts = Counter(_normalize(p) for p in texts if len(p) <= 150)
     boilerplate = {t for t, n in counts.items() if n >= 5 and t}
+    # POV-Kapitel (Game of Thrones: „BRAN“, „CATELYN“ …) wiederholen sich als eigene Absätze;
+    # einmalige Großbuchstaben-Absätze mitten im Text (Anhänge „HOUSE STARK“, OCR-Kopfzeilen
+    # „A GAML OF THRONES 109“) dagegen nicht.
+    caps_counts = Counter(p.strip() for p in texts if _is_caps_heading(p))
 
     def after_marker(i: int) -> bool:
         if i == 0:
@@ -90,7 +98,26 @@ def _heading_flags(paras: list[tuple[str, int]]) -> list[bool]:
         prev = texts[i - 1].strip()
         return bool(_MARKER_RE.match(prev)) or _normalize(prev) in boilerplate
 
-    return [_is_caps_heading(p) and after_marker(i) for i, p in enumerate(texts)]
+    # Bücher mit Kapitel-Markern/Fußzeilen (Harry Potter) nutzen nur diese Regel — die
+    # Wiederholungsregel würde dort wiederkehrende Schilder/Erlasse („— BY ORDER OF —“, „WHAM“)
+    # zu Kapiteln machen. Sie greift nur, wo es keine Marker gibt (Game of Thrones).
+    marked = [_is_caps_heading(p) and after_marker(i) for i, p in enumerate(texts)]
+    if sum(marked) >= 3 and _spread(paras, marked) >= 0.5:
+        return marked
+    return [
+        _is_caps_heading(p)
+        and (caps_counts[p.strip()] >= 2 or p.strip() in ("PROLOGUE", "EPILOGUE"))
+        for p in texts
+    ]
+
+
+def _spread(paras: list[tuple[str, int]], flags: list[bool]) -> float:
+    """Anteil des Buchs zwischen erster und letzter Überschrift. Ein nummeriertes
+    Inhaltsverzeichnis am Anfang (GoT Band 5) liefert viele „Überschriften“ auf den ersten
+    0,1 % — echte Kapitel verteilen sich über das ganze Buch."""
+    offsets = [start for (_, start), f in zip(paras, flags) if f]
+    end = paras[-1][1] + len(paras[-1][0]) if paras else 0
+    return (offsets[-1] - offsets[0]) / end if len(offsets) >= 2 and end else 0.0
 
 
 def chapter_starts(cleaned_text: str) -> list[tuple[int, str]]:
