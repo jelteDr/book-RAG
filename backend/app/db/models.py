@@ -106,6 +106,10 @@ class ChatMessage(SQLModel, table=True):
     # Vollständige Quell-Liste inkl. Chunk-Text (Chips bleiben nach dem Laden lesbar;
     # ältere Zeilen können noch die frühere "leichte" Liste ohne Text enthalten).
     sources: list | None = Field(default=None, sa_column=Column(JSON))
+    # Antwort-Varianten (↻ „neu erzeugen“): Assistant -> zugehörige User-Nachricht; genau eine
+    # Variante je Frage ist ausgewählt und geht in den Verlauf für Folgefragen.
+    parent_id: int | None = Field(default=None, index=True)
+    selected: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

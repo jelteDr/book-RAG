@@ -5,6 +5,7 @@ from sqlmodel import col, select
 
 from app.db.models import ChatMessage, Conversation
 from app.db.session import session_factory
+from app.services.conversation_view import group_turns
 
 router = APIRouter(tags=["conversations"])
 
@@ -38,11 +39,27 @@ async def get_conversation(conversation_id: int) -> dict:
         "id": conv.id,
         "title": conv.title,
         "group_id": conv.group_id,
-        "messages": [
-            {"role": m.role, "content": m.content, "model": m.model, "sources": m.sources or []}
-            for m in msgs
-        ],
+        # User-Nachrichten + Assistant-Runden mit allen Varianten (↻) und der gewählten.
+        "messages": group_turns(list(msgs)),
     }
+
+
+@router.patch("/conversations/{conversation_id}/messages/{message_id}/select")
+async def select_variant(conversation_id: int, message_id: int) -> dict:
+    """Wählt eine Antwort-Variante aus — sie geht ab jetzt in den Verlauf für Folgefragen."""
+    async with session_factory() as session:
+        msg = await session.get(ChatMessage, message_id)
+        if not msg or msg.conversation_id != conversation_id or msg.role != "assistant":
+            raise HTTPException(status_code=404, detail="Antwort nicht gefunden")
+        if msg.parent_id is not None:
+            siblings = (
+                await session.exec(select(ChatMessage).where(ChatMessage.parent_id == msg.parent_id))
+            ).all()
+            for s in siblings:
+                s.selected = s.id == message_id
+                session.add(s)
+            await session.commit()
+    return {"selected": message_id}
 
 
 @router.delete("/conversations/{conversation_id}")
