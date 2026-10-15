@@ -87,6 +87,11 @@ function chatStream(): Response {
 
 function respond(path: string, method: string): Response {
   if (path === '/api/chat') return chatStream();
+  const bookPatch = path.match(/^\/api\/books\/(\d+)$/);
+  if (bookPatch && method === 'PATCH') {
+    const all = Object.values(books).flat() as { id: number }[];
+    return json(all.find((b) => b.id === Number(bookPatch[1])) ?? {});
+  }
   if (method !== 'GET') {
     if (path.endsWith('/upload')) {
       return json({

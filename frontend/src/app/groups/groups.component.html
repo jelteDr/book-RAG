@@ -42,6 +42,48 @@
 
     <ul class="divide-y divide-line">
       @for (b of booksOf(g.id); track b.id) {
+        @if (editingBookId() === b.id) {
+          <li class="py-3">
+            <!-- Titel/Autor korrigieren: Enter speichert, Esc bricht ab -->
+            <form
+              class="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+              (ngSubmit)="saveEdit(b, g.id)"
+              (keydown.escape)="cancelEdit()"
+            >
+              <div class="min-w-0">
+                <label class="field-label" [for]="'edit-title-' + b.id">Titel</label>
+                <input
+                  [id]="'edit-title-' + b.id"
+                  name="edit-title"
+                  class="control"
+                  [ngModel]="editTitle()"
+                  (ngModelChange)="editTitle.set($event); editError.set('')"
+                  [attr.aria-invalid]="editError() ? true : null"
+                  [attr.aria-describedby]="editError() ? 'edit-error-' + b.id : null"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="min-w-0">
+                <label class="field-label" [for]="'edit-author-' + b.id">Autor</label>
+                <input
+                  [id]="'edit-author-' + b.id"
+                  name="edit-author"
+                  class="control"
+                  [ngModel]="editAuthor()"
+                  (ngModelChange)="editAuthor.set($event)"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="flex gap-2">
+                <button type="submit" class="btn btn-primary" [disabled]="editSaving()">Speichern</button>
+                <button type="button" class="btn btn-ghost" (click)="cancelEdit()">Abbrechen</button>
+              </div>
+            </form>
+            @if (editError()) {
+              <p [id]="'edit-error-' + b.id" class="mt-1.5 text-[13px] text-danger" role="alert">{{ editError() }}</p>
+            }
+          </li>
+        } @else {
         <li class="flex flex-wrap items-center gap-x-3 py-2">
           <span class="tile"><lucide-icon [img]="icons.FileText" [size]="18" aria-hidden="true" /></span>
           <div class="min-w-0 flex-1">
@@ -64,6 +106,15 @@
             } @else {
               <button
                 type="button"
+                class="icon-btn"
+                [attr.aria-label]="'Titel und Autor bearbeiten: ' + (b.title || b.book_key)"
+                title="Titel/Autor bearbeiten"
+                (click)="startEdit(b)"
+              >
+                <lucide-icon [img]="icons.Pencil" [size]="18" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
                 class="icon-btn hover:!text-danger"
                 [attr.aria-label]="'Dokument löschen: ' + (b.title || b.book_key)"
                 title="Dokument löschen"
@@ -74,6 +125,7 @@
             }
           </div>
         </li>
+        }
       } @empty {
         <li class="py-4 text-sm text-ink-muted">Noch keine Dokumente. Lade unten das erste hoch.</li>
       }

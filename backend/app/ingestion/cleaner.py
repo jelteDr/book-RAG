@@ -12,6 +12,8 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
+from app.ingestion.chunker import _is_caps_heading
+
 # Einzelzeichen-Ersetzungen (Smart Quotes, Dashes, Ligaturen, Zero-Width).
 _TRANSLATE = {
     # Anführungszeichen -> gerade
@@ -37,6 +39,11 @@ _TABLE = {ord(k): v for k, v in {**_TRANSLATE, **_LIGATURES}.items()}
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 _PAGENUM_RE = re.compile(r"^\s*\d{1,4}\s*$")
 _MULTISPACE_RE = re.compile(r"[ \t]{2,}")
+# Zeilen-Heuristik (hart umbrochene Texte ohne Leerzeilen zwischen Absätzen, z. B. die GoT-Dateien).
+_PAGE_LINE_RE = re.compile(r"^Page\s+\d{1,4}$", re.IGNORECASE)
+_PARA_END_RE = re.compile(r"[.!?\"')\]]$")
+LINE_MODE_MAX_BLANK_RATIO = 0.10  # GoT 0.03; Harry Potter ~0.47, Dracula 0.19 -> bisheriger Modus
+SHORT_LINE_FACTOR = 0.85  # Zeile < 85 % der typischen Umbruchbreite (p90) + Satzende = Absatzende
 
 
 @dataclass
@@ -49,6 +56,7 @@ class CleaningReport:
     special_chars_normalized: int = 0
     nonascii_ratio_after: float = 0.0
     dropped_ratio: float = 0.0
+    paragraphs_by_line_length: bool = False
     warnings: list[str] = field(default_factory=list)
     before_sample: str = ""
     after_sample: str = ""
@@ -75,7 +83,8 @@ def clean(text: str, *, max_dropped_ratio: float = 0.4) -> tuple[str, CleaningRe
 
     # 4) Zeilen normalisieren (CRLF -> LF) und De-Wrapping.
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    cleaned, merged, pagenums = _dewrap(text)
+    line_mode = _blank_ratio(text) < LINE_MODE_MAX_BLANK_RATIO
+    cleaned, merged, pagenums = _dewrap_lines(text) if line_mode else _dewrap(text)
 
     # 5) Whitespace glätten, überzählige Leerzeilen auf max. eine reduzieren.
     cleaned = _MULTISPACE_RE.sub(" ", cleaned)
@@ -91,6 +100,7 @@ def clean(text: str, *, max_dropped_ratio: float = 0.4) -> tuple[str, CleaningRe
         special_chars_normalized=special_count,
         nonascii_ratio_after=round(nonascii / max(len(cleaned), 1), 4),
         dropped_ratio=round(1 - len(cleaned) / max(original_len, 1), 4),
+        paragraphs_by_line_length=line_mode,
         before_sample=before_sample,
         after_sample=_sample(cleaned),
     )
@@ -146,6 +156,62 @@ def _dewrap(text: str) -> tuple[str, int, int]:
             current.append(stripped)
     flush()
 
+    return "\n\n".join(p for p in paragraphs if p), merged, pagenums
+
+
+def _blank_ratio(text: str) -> float:
+    """Leerzeilen je Textzeile. Gutenberg-/normale Texte trennen Absätze mit Leerzeilen (> 15 %);
+    hart umbrochene Exporte haben nur an Seitenwechseln welche (GoT: 3 %)."""
+    lines = text.split("\n")
+    nonblank = sum(1 for line in lines if line.strip())
+    return (len(lines) - nonblank) / max(nonblank, 1)
+
+
+def _dewrap_lines(text: str) -> tuple[str, int, int]:
+    """De-Wrapping für hart umbrochene Texte OHNE Leerzeilen zwischen Absätzen.
+
+    Leerzeilen markieren dort Seitenwechsel (oft mitten im Satz) und werden ignoriert, ebenso
+    Seitenzahlen/„Page 12“. Ein Absatz endet, wenn eine Zeile deutlich kürzer als die typische
+    Umbruchbreite ist UND auf ein Satzende/Anführungszeichen endet („was concerned.“). Kurze
+    Großbuchstaben-Zeilen (Kapitel-Überschriften wie „BRAN“) werden eigene Absätze.
+    """
+    lines = [line.strip() for line in text.split("\n")]
+    lens = sorted(len(line) for line in lines if line)
+    width = lens[int(len(lens) * 0.9)] if lens else 0
+    paragraphs: list[str] = []
+    current: list[str] = []
+    merged = 0
+    pagenums = 0
+
+    def flush() -> None:
+        nonlocal merged
+        if not current:
+            return
+        buf = current[0]
+        for nxt in current[1:]:
+            if re.search(r"[A-Za-zÀ-ÿ]-$", buf) and nxt[:1].islower():
+                buf = buf[:-1] + nxt  # De-Hyphenation
+            else:
+                buf = buf + " " + nxt
+            merged += 1
+        paragraphs.append(buf.strip())
+        current.clear()
+
+    for line in lines:
+        if not line:
+            continue  # Seitenwechsel, kein Absatzende
+        if _PAGENUM_RE.match(line) or _PAGE_LINE_RE.match(line):
+            pagenums += 1
+            continue
+        if _is_caps_heading(line):
+            flush()
+            current.append(line)
+            flush()
+            continue
+        current.append(line)
+        if len(line) < SHORT_LINE_FACTOR * width and _PARA_END_RE.search(line):
+            flush()
+    flush()
     return "\n\n".join(p for p in paragraphs if p), merged, pagenums
 
 

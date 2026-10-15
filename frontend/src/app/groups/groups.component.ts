@@ -7,6 +7,7 @@ import {
   Layers,
   LucideAngularModule,
   MessageSquare,
+  Pencil,
   Plus,
   Trash2,
 } from 'lucide-angular';
@@ -41,7 +42,14 @@ export class GroupsComponent {
   readonly error = signal('');
   readonly loading = signal(true);
 
-  readonly icons = { FileText, FolderOpen, Layers, MessageSquare, Plus, Trash2 };
+  readonly icons = { FileText, FolderOpen, Layers, MessageSquare, Pencil, Plus, Trash2 };
+
+  // Titel/Autor eines Buchs inline bearbeiten (eine Zeile zur Zeit).
+  readonly editingBookId = signal<number | null>(null);
+  readonly editTitle = signal('');
+  readonly editAuthor = signal('');
+  readonly editError = signal('');
+  readonly editSaving = signal(false);
 
   /** Löschen fragt einmal in der Zeile nach; Schlüssel z. B. "group:3", "book:12", "collection:1". */
   readonly confirmDelete = signal<string | null>(null);
@@ -153,6 +161,40 @@ export class GroupsComponent {
     this.confirmDelete.set(null);
     await this.library.deleteGroup(group.id);
     await this.loadGroups();
+  }
+
+  startEdit(book: Book): void {
+    this.confirmDelete.set(null);
+    this.editingBookId.set(book.id);
+    this.editTitle.set(book.title ?? '');
+    this.editAuthor.set(book.author ?? '');
+    this.editError.set('');
+  }
+
+  cancelEdit(): void {
+    this.editingBookId.set(null);
+    this.editError.set('');
+  }
+
+  async saveEdit(book: Book, groupId: number): Promise<void> {
+    const title = this.editTitle().trim();
+    if (!title) {
+      this.editError.set('Titel darf nicht leer sein.');
+      return;
+    }
+    this.editSaving.set(true);
+    try {
+      const updated = await this.library.patchBook(book.id, { title, author: this.editAuthor().trim() });
+      this.booksByGroup.update((m) => ({
+        ...m,
+        [groupId]: (m[groupId] ?? []).map((b) => (b.id === book.id ? updated : b)),
+      }));
+      this.editingBookId.set(null);
+    } catch (e) {
+      this.editError.set(e instanceof Error ? e.message : String(e));
+    } finally {
+      this.editSaving.set(false);
+    }
   }
 
   async deleteBook(book: Book): Promise<void> {
