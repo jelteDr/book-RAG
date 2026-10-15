@@ -29,8 +29,10 @@ alles lokal, Hypothesen vorab notiert ([`eval/RESULTS.md`](eval/RESULTS.md)).
    Corrective RAG mit LangGraph brachten auf diesem Setup **keinen** Gewinn — dokumentiert, nicht
    versteckt.
 
-<sub>n=36, ein Buch: Tendenzen, die meisten Paarvergleiche sind nicht signifikant. Details:
-Abschnitt *Evaluation* unten.</sub>
+<sub>n=36, ein Buch: Tendenzen, die meisten Paarvergleiche sind nicht signifikant. Die
+Korrektheit stammt von einem LLM-Judge, der laut blindem Mensch-Abgleich (n=20, Kappa 0.30–0.42)
+**zu streng** urteilt — absolute Werte sind untere Schranken, Vergleiche bleiben verwertbar.
+Details: Abschnitt *Evaluation* unten und `eval/RESULTS.md`.</sub>
 
 ## Demo
 

@@ -790,6 +790,35 @@ llama3.1:8b 9:3 (p 0.15) / 6:2 (p 0.29); qwen3 4:2 / 10:7; mistral 2:3 / 6:6; ge
   Modell-Dropdown, mit den genannten Nachteilen. gemma4 ist die interessanteste Alternative für
   „ehrlich + schnell“.
 
+## Judge-Validierung — LLM-Judge gegen menschliche Urteile (`notebooks/judge_validation.ipynb`)
+
+**Anlass:** Die Korrektheit in Ablation und Modellvergleich stammt von LLM-Judges, die untereinander
+nur Kappa 0.39 erreichen. Hier wurden 20 Antworten aus dem Modellvergleich **blind** von Hand
+bewertet (10, die der 14b-Judge als korrekt, 10, die er als falsch wertete; über alle Modelle
+gemischt, Seed 7). Labels: `eval/judge_labels.jsonl` (nur IDs + Urteil).
+
+| Judge | Genauigkeit | Cohen's Kappa | Mensch ja / Judge ja | Judge zu gnädig | Judge zu streng |
+|---|---|---|---|---|---|
+| qwen2.5:14b (Haupt-Judge) | 0.65 | 0.30 | 8 | 2 | **5** |
+| qwen2.5:7b | 0.70 | 0.42 | 8 | 1 | **5** |
+
+P(Mensch „korrekt“ | Judge „korrekt“) = 0.80 (14b) bzw. 0.89 (7b); P(Mensch „korrekt“ | Judge
+„falsch“) = 0.50 bzw. 0.45. Insgesamt hielt der Mensch 13 der 20 Antworten für korrekt.
+
+**Befund:**
+- **Beide Judges sind zu streng, nicht zu gnädig:** Von 13 menschlich korrekten Antworten werten sie
+  je 5 als falsch; umgekehrt nur 1–2 Fehlurteile. Die berichteten Korrektheitswerte (Ablation
+  0.25–0.34, Modellvergleich 0.19–0.47) **unterschätzen** die tatsächliche Korrektheit deutlich —
+  etwa jede zweite als „falsch“ gewertete Antwort ist laut Mensch richtig.
+- **Grobe Hochrechnung** (n=20, sehr unsicher): Bei Judge-Korrektheit *p* liegt die menschliche
+  Korrektheit bei ≈ 0.80·p + 0.50·(1−p); für qwen2.5:7b (Judge 14b: 0.22) also eher ~0.57 als 0.22.
+- **Der kleinere Judge ist nicht schlechter:** qwen2.5:7b stimmt etwas besser mit dem Menschen
+  überein (Kappa 0.42 vs. 0.30) — der als Haupt-Judge gewählte 14b brachte keinen Vorteil.
+- **Was das für die Befunde heißt:** Relative Vergleiche (Ablation, Modellvergleich) bleiben
+  verwertbar, solange der Judge-Fehler alle Arme ähnlich trifft; absolute Korrektheitswerte sind
+  untere Schranken. Kappa 0.30–0.42 ist „mäßig“ — für feinere Unterschiede reicht kein 7–14B-Judge;
+  ein stärkerer Judge oder mehr menschliche Labels wären nötig.
+
 ## Nächste Schritte
 
 1. ~~Gold-Set v2 mit Span-Labels~~ ✅ kuratiert (36 Items, s. o.); Eval läuft auf
