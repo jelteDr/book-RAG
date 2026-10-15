@@ -185,6 +185,8 @@ async def main() -> None:
     ap.add_argument("--limit", type=int, help="nur die ersten N Items (Smoke-Test)")
     ap.add_argument("--build-plain", action="store_true", help=f"{PLAIN} aufbauen und beenden")
     ap.add_argument("--plot-only", action="store_true")
+    ap.add_argument("--out", default=str(ROOT / "results" / "ablation.json"),
+                    help="Ergebnis-JSON (Default: die Ablation; für Teil-Läufe eigene Datei)")
     args = ap.parse_args()
 
     if args.build_plain:  # je Gruppe des Gold-Sets (Dracula, Frankenstein, …)
@@ -356,7 +358,7 @@ async def main() -> None:
     print(f"Judge-Kalibrierung: Referenz=JA {cal['pos_ja_rate']:.2f} (soll 1), "
           f"fremde Referenz=JA {cal['neg_ja_rate']:.2f} (soll 0)")
 
-    out = ROOT / "results" / "ablation.json"
+    out = Path(args.out)
     out.write_text(json.dumps({"model": args.model, "n": len(gold), "summary": summary,
                                "steps": steps, "judge_calibration": cal, "rows": rows}, indent=2))
     if len(stages) == len(STAGES):
