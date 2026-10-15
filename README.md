@@ -34,8 +34,19 @@ Abschnitt *Evaluation* unten.</sub>
 
 ## Demo
 
+![Demo: Frage, gestreamte Antwort mit Zitat, neu erzeugen, Quelle aufklappen](docs/demo.gif)
+
 Deutsche Frage → englischer Quelltext (cross-lingual) → gestreamte Antwort mit `[n]`-Zitaten;
-Klick auf einen Marker zeigt die exakte Quell-Passage.
+Klick auf einen Marker zeigt die exakte Quell-Passage. ↻ erzeugt eine weitere Antwort-Variante,
+mit ‹ 2/3 › wählst du, welche im Verlauf bleibt.
+
+| Antwort mit aufgeklappter Quelle | Dunkles Design |
+|---|---|
+| ![Chat hell](docs/screenshots/chat-zitat-hell.jpg) | ![Chat dunkel](docs/screenshots/chat-zitat-dunkel.jpg) |
+| **Dokumente** — Gruppen, Bücher, Titel bearbeiten | **Dashboard** — Telemetrie je Modell |
+| ![Dokumente](docs/screenshots/dokumente.jpg) | ![Dashboard](docs/screenshots/dashboard.jpg) |
+
+<sub>Gezeigt werden nur gemeinfreie Texte (*Dracula*); urheberrechtlich geschützte Bücher bleiben lokal.</sub>
 
 **Ablauf:** Frage eintippen → Antwort wird tokenweise gestreamt (TTFT sichtbar) → jede Aussage
 trägt einen `[n]`-Marker → Klick auf einen Marker/Chip öffnet den zugehörigen Quell-Chunk mit
@@ -76,6 +87,10 @@ Angular (minimal, Signals) ──REST + SSE──► FastAPI (Python 3.12)
   Unterhaltung **persistiert** und bleiben beim Wiederöffnen lesbar.
 - **Gespeicherte Chats mit Verlauf**: Unterhaltungen in Postgres, Sidebar nach Gruppen gebündelt;
   **History-aware Retrieval** (Folgefragen werden per LLM zu eigenständigen Suchanfragen kondensiert).
+- **Antwort neu erzeugen**: ↻ an der letzten Antwort liefert eine weitere Variante, mit ‹ 2/3 ›
+  blätterst du; die gewählte Variante ist die, die Folgefragen als Verlauf sehen.
+- **Bücher bearbeiten**: Titel/Autor in der Dokumente-Ansicht korrigieren (DB + alle Chunks);
+  Zitat-Chips zeigen Kapitel, ohne erkanntes Kapitel die Position im Buch („bei 37 %“).
 - **Cross-linguales Retrieval** (deutsche Fragen, englische Texte) via `bge-m3`.
 - **Dashboard**: Live-Telemetrie aus dem `query_log` — Anfragen, Ø TTFT, Ø TPS pro Modell,
   inkl. Vergleichs-Barplots; Modell-Metadaten (Parameter, Quantisierung, Kontext) aus Ollama.
