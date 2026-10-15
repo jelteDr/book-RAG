@@ -17,6 +17,7 @@ class ChatRequest(BaseModel):
     top_k: int | None = None
     conversation_id: int | None = None
     mode: str | None = None  # local | global | auto (Graph-RAG) | crag (Corrective RAG, Exp 11)
+    regenerate: bool = False  # letzte Frage der Unterhaltung erneut beantworten (neue Variante)
 
 
 def _sse(event: str, data: dict) -> str:
@@ -31,6 +32,7 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
         async for event, payload in service.answer(
             req.question, model=req.model, group_id=req.group_id, top_k=req.top_k,
             conversation_id=req.conversation_id, mode=req.mode,
+            regenerate=req.regenerate and req.conversation_id is not None,
         ):
             yield _sse(event, payload)
 

@@ -17,11 +17,13 @@ import {
   ArrowUp,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   LucideAngularModule,
   MessagesSquare,
   Plus,
+  RefreshCw,
   Shield,
   ShieldCheck,
   Trash2,
@@ -31,7 +33,7 @@ import {
 
 import { ChatService } from '../chat.service';
 import { LibraryService } from '../library.service';
-import { Collection, Conversation, Group, Message, Source } from '../models';
+import { ChatRequest, Collection, Conversation, Group, Message, Source, Variant } from '../models';
 
 interface Segment {
   text: string;
@@ -56,6 +58,24 @@ function prettyChapter(raw: string): string {
     .replace(/\b([a-z])([a-z'’]*)/g, (w, first: string, rest: string) =>
       /^(?=[ivxlc])(c[md]|d?c{0,3})(x[cl]|l?x{0,3})(i[xv]|v?i{0,3})$/.test(w) ? w.toUpperCase() : first.toUpperCase() + rest,
     );
+}
+
+function asVariant(m: Message): Variant {
+  return { id: m.variantId, text: m.text, sources: m.sources ?? [], meta: m.meta };
+}
+
+/** Variante i anzeigen (Text, Quellen, Meta-Zeile kommen aus der Variante). */
+function showVariant(m: Message, i: number): Message {
+  const v = m.variants![i];
+  return { ...m, text: v.text, sources: v.sources, meta: v.meta, variantId: v.id, selectedVariant: i, error: undefined };
+}
+
+/** Neue Antwort aus ↻ anhängen und auswählen; schlägt sie fehl, bleibt die alte mit Hinweis stehen. */
+function withNewVariant(old: Message, fresh: Message): Message {
+  if (fresh.error) return { ...old, error: `Neu erzeugen fehlgeschlagen: ${fresh.error}` };
+  const base = old.error && !old.variants ? [] : (old.variants ?? [asVariant(old)]);
+  const variants = [...base, asVariant(fresh)];
+  return showVariant({ ...fresh, variants }, variants.length - 1);
 }
 
 @Component({
@@ -90,7 +110,9 @@ export class ChatComponent implements OnDestroy {
     ArrowUp,
     Check,
     ChevronDown,
+    ChevronLeft,
     ChevronRight,
+    RefreshCw,
     ChevronsUpDown,
     MessagesSquare,
     Plus,
@@ -359,7 +381,11 @@ export class ChatComponent implements OnDestroy {
       this.currentConversationId.set(id);
       this.chatListOpen.set(false);
       this.messages.set(
-        conv.messages.map((m) => ({ role: m.role, text: m.content, sources: m.sources })),
+        conv.messages.map((m): Message => {
+          if (m.role === 'user') return { role: 'user', text: m.content };
+          const variants: Variant[] = m.variants.map((v) => ({ id: v.id, text: v.content, sources: v.sources }));
+          return showVariant({ role: 'assistant', text: '', variants }, m.selected);
+        }),
       );
       this.expanded.set(null);
     } catch {
@@ -398,25 +424,73 @@ export class ChatComponent implements OnDestroy {
     }
   }
 
+  /** Index der Antwort, die gerade neu erzeugt wird (sie wird solange durch die Stream-Bubble ersetzt). */
+  readonly regeneratingIndex = signal<number | null>(null);
+
   async send(): Promise<void> {
     const question = this.question().trim();
     if (!question || this.streaming()) return;
 
     this.messages.update((list) => [...list, { role: 'user', text: question }]);
     this.question.set('');
+    await this.streamAnswer(this.buildRequest(question), (answer) =>
+      this.messages.update((list) => [...list, answer]),
+    );
+  }
+
+  /** ↻ an der letzten Antwort: dieselbe Frage erneut beantworten, Ergebnis als neue Variante. */
+  async regenerate(): Promise<void> {
+    const list = this.messages();
+    const idx = list.length - 1;
+    const question = [...list].reverse().find((m) => m.role === 'user')?.text;
+    if (!question || list[idx]?.role !== 'assistant' || this.streaming() || !this.currentConversationId()) return;
+
+    this.regeneratingIndex.set(idx);
+    this.expanded.set(null);
+    try {
+      await this.streamAnswer({ ...this.buildRequest(question), regenerate: true }, (answer) =>
+        this.messages.update((all) => all.map((m, i) => (i === idx ? withNewVariant(m, answer) : m))),
+      );
+    } finally {
+      this.regeneratingIndex.set(null);
+    }
+  }
+
+  /** ‹ / › zwischen Antwort-Varianten; die Wahl wird gespeichert (Verlauf für Folgefragen). */
+  selectVariant(index: number, delta: number): void {
+    const msg = this.messages()[index];
+    if (!msg?.variants || this.streaming()) return;
+    const next = (msg.selectedVariant ?? 0) + delta;
+    if (next < 0 || next >= msg.variants.length) return;
+    const shown = showVariant(msg, next);
+    this.messages.update((all) => all.map((m, i) => (i === index ? shown : m)));
+    this.expanded.set(null);
+    const conv = this.currentConversationId();
+    if (conv && shown.variantId) void this.chat.selectVariant(conv, shown.variantId);
+  }
+
+  isLastAnswer(index: number): boolean {
+    const list = this.messages();
+    return index === list.length - 1 && list[index]?.role === 'assistant';
+  }
+
+  private buildRequest(question: string): ChatRequest {
+    return {
+      question,
+      model: this.selectedModel() || null,
+      group_id: this.selectedGroup() || null,
+      conversation_id: this.currentConversationId(),
+      mode: this.cragAvailable() && this.cragOn() ? 'crag' : null,
+    };
+  }
+
+  private async streamAnswer(request: ChatRequest, finish: (answer: Message) => void): Promise<void> {
     this.draft.set('');
     this.streaming.set(true);
     this.revising.set(false);
     this.startThinking();
 
     try {
-      const request = {
-        question,
-        model: this.selectedModel() || null,
-        group_id: this.selectedGroup() || null,
-        conversation_id: this.currentConversationId(),
-        mode: this.cragAvailable() && this.cragOn() ? ('crag' as const) : null,
-      };
       for await (const ev of this.chat.stream(request)) {
         if (ev.event === 'token') {
           this.draft.update((d) => d + (ev.data.content ?? ''));
@@ -426,10 +500,11 @@ export class ChatComponent implements OnDestroy {
           this.revising.set(true);
         } else if (ev.event === 'done') {
           if (ev.data.conversation_id) this.currentConversationId.set(ev.data.conversation_id);
-          this.finish({
+          finish({
             role: 'assistant',
             text: this.draft(),
             sources: ev.data.sources ?? [],
+            variantId: ev.data.message_id,
             meta: {
               model: ev.data.model ?? '',
               ttft_ms: ev.data.ttft_ms ?? 0,
@@ -439,11 +514,11 @@ export class ChatComponent implements OnDestroy {
             },
           });
         } else if (ev.event === 'error') {
-          this.finish({ role: 'assistant', text: this.draft(), error: ev.data.message });
+          finish({ role: 'assistant', text: this.draft(), error: ev.data.message });
         }
       }
     } catch (e) {
-      this.finish({ role: 'assistant', text: this.draft(), error: `Verbindung fehlgeschlagen: ${e}` });
+      finish({ role: 'assistant', text: this.draft(), error: `Verbindung fehlgeschlagen: ${e}` });
     } finally {
       this.stopThinking();
       this.streaming.set(false);
@@ -452,7 +527,4 @@ export class ChatComponent implements OnDestroy {
     }
   }
 
-  private finish(message: Message): void {
-    this.messages.update((list) => [...list, message]);
-  }
 }

@@ -67,10 +67,14 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-function chatStream(): Response {
+let mockMessageId = 100;
+
+function chatStream(regenerate = false): Response {
   const encoder = new TextEncoder();
   const send = (event: string, data: unknown) => encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  const tokens = answer.split(/(?<= )/);
+  const id = ++mockMessageId;
+  const text = regenerate ? `Variante ${id}: ${answer}` : answer;
+  const tokens = text.split(/(?<= )/);
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       await new Promise((resolve) => setTimeout(resolve, 2500)); // Denk-Phase sichtbar machen
@@ -78,15 +82,16 @@ function chatStream(): Response {
         controller.enqueue(send('token', { content }));
         await new Promise((resolve) => setTimeout(resolve, 40));
       }
-      controller.enqueue(send('done', { sources, model: modelNames[0], ttft_ms: 2500, e2e_ms: 4200, tps: 11.8, conversation_id: 1, crag: { attempts: 2, n_relevant: 3, regenerated: false, refused: false } }));
+      controller.enqueue(send('done', { sources, model: modelNames[0], ttft_ms: 2500, e2e_ms: 4200, tps: 11.8, conversation_id: 1, message_id: id, crag: { attempts: 2, n_relevant: 3, regenerated: false, refused: false } }));
       controller.close();
     },
   });
   return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
 }
 
-function respond(path: string, method: string): Response {
-  if (path === '/api/chat') return chatStream();
+function respond(path: string, method: string, body?: string): Response {
+  if (path === '/api/chat') return chatStream(Boolean(body && JSON.parse(body).regenerate));
+  if (/^\/api\/conversations\/\d+\/messages\/\d+\/select$/.test(path)) return json({ ok: true });
   const bookPatch = path.match(/^\/api\/books\/(\d+)$/);
   if (bookPatch && method === 'PATCH') {
     const all = Object.values(books).flat() as { id: number }[];
@@ -118,8 +123,15 @@ function respond(path: string, method: string): Response {
     return json({
       ...found,
       messages: [
-        { role: 'user', content: found.title, model: null, sources: [] },
-        { role: 'assistant', content: answer, model: modelNames[0], sources },
+        { role: 'user', id: 1, content: found.title },
+        {
+          role: 'assistant',
+          selected: 1,
+          variants: [
+            { id: 2, content: `Erste Variante: ${answer}`, model: modelNames[0], sources },
+            { id: 3, content: answer, model: modelNames[0], sources },
+          ],
+        },
       ],
     });
   }
@@ -133,7 +145,7 @@ export function installMockApi(): void {
   window.fetch = async (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, location.origin);
     if (!url.pathname.startsWith('/api/')) return realFetch(input, init);
-    return respond(url.pathname, (init?.method ?? 'GET').toUpperCase());
+    return respond(url.pathname, (init?.method ?? 'GET').toUpperCase(), typeof init?.body === 'string' ? init.body : undefined);
   };
   console.info('[mock] /api/* wird mit Beispieldaten beantwortet – ?mock=0 beendet den Modus.');
 }

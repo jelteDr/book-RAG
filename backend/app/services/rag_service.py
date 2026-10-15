@@ -25,6 +25,7 @@ from app.rag.expander import expand_points
 from app.rag.prompt_builder import build_messages
 from app.rag.retriever import retrieve
 from app.rag.streaming import stream_deltas
+from app.services.conversation_view import history_from
 from app.validation import validate_question
 
 # Ein Event ist (name, payload) — die Route macht daraus SSE.
@@ -55,12 +56,15 @@ class RagService:
     async def answer(
         self, question: str, *, model: str | None = None, group_id: str | None = None,
         top_k: int | None = None, conversation_id: int | None = None, mode: str | None = None,
+        regenerate: bool = False,
     ) -> AsyncIterator[Event]:
         """Liefert nacheinander ('token'|'done'|'error', payload)-Events.
 
         `mode` (local|global|auto) überschreibt GRAPH_RAG_MODE für diese Frage (Tests/Eval);
         global nur mit aktivem Graph-Service und Community-Index, sonst Fallback lokal.
         `mode=crag` delegiert an den Corrective-RAG-Graphen (Exp 11), falls aktiv.
+        `regenerate=True` beantwortet die letzte Frage der Unterhaltung erneut als weitere
+        Variante (keine neue User-Nachricht, Verlauf ohne die bisherigen Antworten darauf).
         """
         model = model or self._settings.chat_model
         top_k = top_k or self._settings.top_k
@@ -73,8 +77,8 @@ class RagService:
             return
 
         # Unterhaltung sicherstellen + Nutzer-Nachricht speichern; prior History holen.
-        conversation_id, history = await self._ensure_conversation(
-            conversation_id, question, group_id
+        conversation_id, history, parent_id = await self._ensure_conversation(
+            conversation_id, question, group_id, regenerate=regenerate
         )
 
         # History-aware: Folgefrage zu eigenständiger Suchanfrage umschreiben (Retrieval),
@@ -85,7 +89,8 @@ class RagService:
 
         if mode == "crag" and self._crag is not None and self._crag.active:
             async for event in self._answer_crag(
-                question, retrieval_query, history, model, group_id, top_k, conversation_id
+                question, retrieval_query, history, model, group_id, top_k, conversation_id,
+                parent_id,
             ):
                 yield event
             return
@@ -155,7 +160,7 @@ class RagService:
             msg = "Dazu finde ich in den Quellen nichts."
             done = {"model": model, "sources": [], "retrieved": [], "conversation_id": conversation_id}
             await self._log_query(question, model, group_id, done)
-            await self._save_assistant(conversation_id, msg, model, [])
+            done.update(await self._save_assistant(conversation_id, msg, model, [], parent_id))
             yield "token", {"content": msg}
             yield "done", done
             return
@@ -203,12 +208,12 @@ class RagService:
                 self._faithfulness.check, answer, done["sources"]
             )
         await self._log_query(question, model, group_id, done)
-        await self._save_assistant(conversation_id, answer, model, done["sources"])
+        done.update(await self._save_assistant(conversation_id, answer, model, done["sources"], parent_id))
         yield "done", done
 
     async def _answer_crag(
         self, question: str, retrieval_query: str, history: list[dict], model: str,
-        group_id: str | None, top_k: int, conversation_id: int | None,
+        group_id: str | None, top_k: int, conversation_id: int | None, parent_id: int | None = None,
     ) -> AsyncIterator[Event]:
         """Corrective RAG: der Graph liefert die Events, Persistenz + Logging bleiben hier."""
         group_ids = await self._resolve_group_ids(group_id)
@@ -220,7 +225,8 @@ class RagService:
                 answer = payload.pop("answer", "")
                 payload["conversation_id"] = conversation_id
                 await self._log_query(question, model, group_id, payload)
-                await self._save_assistant(conversation_id, answer, model, payload["sources"])
+                payload.update(await self._save_assistant(
+                    conversation_id, answer, model, payload["sources"], parent_id))
             yield event, payload
 
     async def _resolve_group_ids(self, group_id: str | None) -> list[str] | None:
@@ -251,13 +257,18 @@ class RagService:
             return [group_id]
 
     async def _ensure_conversation(
-        self, conversation_id: int | None, question: str, group_id: str | None
-    ) -> tuple[int | None, list[dict]]:
-        """Legt bei Bedarf eine Unterhaltung an, speichert die Nutzer-Nachricht und
-        liefert den bisherigen Verlauf (vor dieser Frage) zurück."""
+        self, conversation_id: int | None, question: str, group_id: str | None,
+        *, regenerate: bool = False,
+    ) -> tuple[int | None, list[dict], int | None]:
+        """Legt bei Bedarf eine Unterhaltung an, speichert die Nutzer-Nachricht und liefert
+        (conversation_id, Verlauf vor dieser Frage, ID der User-Nachricht).
+
+        Bei `regenerate` wird keine neue User-Nachricht gespeichert: die letzte vorhandene ist
+        die Frage, der Verlauf endet davor."""
         if self._session_factory is None:
-            return conversation_id, []
+            return conversation_id, [], None
         history: list[dict] = []
+        parent_id: int | None = None
         try:
             async with self._session_factory() as session:
                 if conversation_id is None:
@@ -274,16 +285,23 @@ class RagService:
                             .order_by(col(ChatMessage.id))
                         )
                     ).all()
-                    history = [{"role": m.role, "content": m.content} for m in prior]
+                    last_user = next((m for m in reversed(prior) if m.role == "user"), None)
+                    if regenerate and last_user is not None:
+                        history = history_from([m for m in prior if m.id < last_user.id])
+                        return conversation_id, history, last_user.id
+                    history = history_from(prior)
                     conv = await session.get(Conversation, conversation_id)
                     if conv:
                         conv.updated_at = datetime.utcnow()
                         session.add(conv)
-                session.add(ChatMessage(conversation_id=conversation_id, role="user", content=question))
+                user_msg = ChatMessage(conversation_id=conversation_id, role="user", content=question)
+                session.add(user_msg)
                 await session.commit()
-            return conversation_id, history
+                await session.refresh(user_msg)
+                parent_id = user_msg.id
+            return conversation_id, history, parent_id
         except Exception:
-            return conversation_id, history
+            return conversation_id, history, parent_id
 
     async def _condense(self, question: str, history: list[dict], model: str) -> str:
         """Schreibt eine Folgefrage anhand des Verlaufs zu einer eigenständigen Suchanfrage um."""
@@ -309,27 +327,42 @@ class RagService:
             return question
 
     async def _save_assistant(
-        self, conversation_id: int | None, answer: str, model: str, sources: list[dict]
-    ) -> None:
+        self, conversation_id: int | None, answer: str, model: str, sources: list[dict],
+        parent_id: int | None = None,
+    ) -> dict:
         """Speichert die Assistenten-Antwort inkl. vollständiger Quellen.
 
         Der Chunk-Text wird MIT gespeichert (~2 KB je Quelle): sonst sind die
         Zitat-Chips nach dem Laden einer Unterhaltung leer, und die Passage soll
         auch dann lesbar bleiben, wenn das Buch später gelöscht wird.
+        Weitere Antworten auf dieselbe Frage (parent_id) werden Varianten; die neue ist
+        ausgewählt. Rückgabe für das done-Event: message_id, variant_index, n_variants.
         """
         if self._session_factory is None or conversation_id is None:
-            return
+            return {}
         try:
             async with self._session_factory() as session:
-                session.add(
-                    ChatMessage(
-                        conversation_id=conversation_id, role="assistant",
-                        content=answer, model=model, sources=sources,
-                    )
+                siblings = []
+                if parent_id is not None:
+                    siblings = (
+                        await session.exec(
+                            select(ChatMessage).where(ChatMessage.parent_id == parent_id)
+                        )
+                    ).all()
+                    for s in siblings:
+                        s.selected = False
+                        session.add(s)
+                msg = ChatMessage(
+                    conversation_id=conversation_id, role="assistant", content=answer,
+                    model=model, sources=sources, parent_id=parent_id, selected=True,
                 )
+                session.add(msg)
                 await session.commit()
+                await session.refresh(msg)
+                return {"message_id": msg.id, "variant_index": len(siblings),
+                        "n_variants": len(siblings) + 1}
         except Exception:
-            pass
+            return {}  # Persistenz ist best-effort — die Antwort selbst geht trotzdem raus
 
     async def _log_query(self, question: str, model: str, group_id: str | None, done: dict) -> None:
         """Schreibt eine query_log-Zeile (best-effort — darf die Antwort nie brechen)."""
