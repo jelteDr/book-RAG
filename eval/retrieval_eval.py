@@ -88,8 +88,28 @@ class _Arm:
         print(f"  MRR:         {sum(self.rr) / n:.3f}")
 
 
+def load_gold(spec: str, default_group: str | None) -> list[dict]:
+    """Lädt ein oder mehrere Gold-Dateien (`a.jsonl,b.jsonl`) — z. B. Dracula + Frankenstein.
+
+    Jedes Item sucht in seiner eigenen Gruppe: Feld `group`, sonst `default_group` (alte Dateien
+    ohne das Feld laufen unverändert). IDs müssen über alle Dateien eindeutig sein.
+    """
+    items: list[dict] = []
+    for path in [p.strip() for p in spec.split(",") if p.strip()]:
+        for line in Path(path).read_text().splitlines():
+            if line.strip():
+                item = json.loads(line)
+                item["group"] = item.get("group") or default_group
+                items.append(item)
+    ids = [it["id"] for it in items]
+    dupes = sorted({i for i in ids if ids.count(i) > 1})
+    if dupes:
+        raise ValueError(f"Gold-IDs doppelt: {dupes}")
+    return items
+
+
 async def evaluate(gold_path: str, group_id: str | None, k: int, embed_model: str) -> None:
-    gold = [json.loads(line) for line in Path(gold_path).read_text().splitlines() if line.strip()]
+    gold = load_gold(gold_path, group_id)
     # unanswerable-Items (v2) messen Antwort-Ehrlichkeit, nicht Retrieval.
     gold = [g for g in gold if g.get("qtype") != "unanswerable"]
 
@@ -107,7 +127,7 @@ async def evaluate(gold_path: str, group_id: str | None, k: int, embed_model: st
                 vectors=vectors,
                 embed_model=embed_model,
                 top_k=k,
-                group_id=group_id,
+                group_id=item["group"],
             )
             payloads = [p.payload or {} for p in points]
 
@@ -144,7 +164,8 @@ async def evaluate(gold_path: str, group_id: str | None, k: int, embed_model: st
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--gold", default=str(Path(__file__).resolve().parent / "gold_dracula.jsonl"))
+    ap.add_argument("--gold", default=str(Path(__file__).resolve().parent / "gold_dracula.jsonl"),
+                    help="eine oder mehrere Gold-Dateien, kommagetrennt")
     ap.add_argument("--group", default="Horror")
     ap.add_argument("--k", type=int, default=8)
     ap.add_argument("--embed-model", default=settings.embed_model)

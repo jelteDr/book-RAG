@@ -6,6 +6,32 @@ werden aufbereitet und indexiert, ein lokales LLM (via **Ollama**) beantwortet F
 Quell-Passage zurückführen (Grounding & Erklärbarkeit). Kern des Projekts ist eine
 **methodisch saubere, ehrliche Evaluation** der Retrieval- und Antwortqualität.
 
+## Ergebnisse auf einen Blick
+
+Gemessen auf einem handgelabelten Gold-Set (36 Fragen zu *Dracula*, passagen-genaue Labels),
+alles lokal, Hypothesen vorab notiert ([`eval/RESULTS.md`](eval/RESULTS.md)).
+
+| Was | Vorher | Nachher |
+|---|---|---|
+| Richtige Passage im Prompt (Retrieval-Pipeline, naiv → final) | 69 % | **78–81 %** |
+| Rang der richtigen Passage (MRR) | 0.41 | **0.54** |
+| Antwort korrekt (LLM-Judge), gleiches Modell qwen2.5:7b | 25 % | 34 % |
+| Antwort korrekt mit stärkerem Modell (qwen2.5:14b / llama3.1:8b), gleiches Retrieval | 34 % | **47 %** |
+
+1. **Retrieval wurde messbar besser** — vor allem durch Contextual Retrieval und Small-to-Big.
+   Danach ist **die Generierung der Engpass**: selbst mit der richtigen Passage im Prompt ist nur
+   etwa jede dritte Antwort eines 7B-Modells korrekt; ein anderes Modell bringt mehr als alle
+   Retrieval-Stufen zusammen — mit Haken (Tempo, Zitatquote, Halluzination bei Unbeantwortbarem).
+2. **Messfehler gefunden und behoben:** Die NLI-Faithfulness schnitt Passagen bei 512 Token ab
+   (98–100 % betroffen); Small-to-Big sah dadurch schlecht aus (0.34) und ist korrekt gemessen die
+   beste Stufe (0.70).
+3. **Ehrliche Negativ-Befunde:** Hybrid-Suche (BM25/Sparse), Graph-RAG (lokal + global) und
+   Corrective RAG mit LangGraph brachten auf diesem Setup **keinen** Gewinn — dokumentiert, nicht
+   versteckt.
+
+<sub>n=36, ein Buch: Tendenzen, die meisten Paarvergleiche sind nicht signifikant. Details:
+Abschnitt *Evaluation* unten.</sub>
+
 ## Demo
 
 Deutsche Frage → englischer Quelltext (cross-lingual) → gestreamte Antwort mit `[n]`-Zitaten;

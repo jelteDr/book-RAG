@@ -34,7 +34,7 @@ sys.path.insert(0, str(ROOT / "eval"))
 
 from ablation import STAGES, answerable_items, judge, sign_test, stage_points  # noqa: E402
 from answer_eval import Faithfulness, generate, is_refusal, token_f1  # noqa: E402
-from retrieval_eval import span_hit  # noqa: E402
+from retrieval_eval import load_gold, span_hit  # noqa: E402
 
 from app.clients.ollama_client import OllamaClient  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
@@ -119,13 +119,13 @@ def plot(summary: list[dict], path: Path) -> None:
 async def measure_latency(models: list[str], args) -> None:
     """Im Hauptlauf schwankten die Zeiten durch Last (llama3.1:8b 9 tok/s < gemma4 16 tok/s).
     Hier: ruhiges System, jedes Modell aufwärmen, dann N Fragen mit identischem Kontext."""
-    gold = [json.loads(x) for x in Path(args.gold).read_text().splitlines() if x.strip()][: args.latency]
+    gold = load_gold(args.gold, args.group)[: args.latency]
     ollama = OllamaClient(settings.ollama_base_url, timeout=600)
     stores = {"prod": VectorStore(settings.qdrant_url, settings.qdrant_collection)}
     out = {}
     try:
         contexts = {it["id"]: await stage_points(S4, it["question"], ollama=ollama, stores=stores,
-                                                 group=args.group) for it in gold}
+                                                 group=it["group"]) for it in gold}
         for model in models:
             await ollama.complete([{"role": "user", "content": "OK"}], model, max_tokens=1)
             # Aufwärmen mit einem vollen RAG-Prompt (Prompt-Verarbeitung + Speicher warm).
@@ -173,7 +173,7 @@ async def main() -> None:
         await measure_latency(models, args)
         return
 
-    gold = [json.loads(x) for x in Path(args.gold).read_text().splitlines() if x.strip()]
+    gold = load_gold(args.gold, args.group)
     if args.limit:
         gold = gold[: args.limit]
     answerable = answerable_items(gold)
@@ -196,7 +196,7 @@ async def main() -> None:
         contexts = {}
         for item in gold:
             contexts[item["id"]] = await stage_points(S4, item["question"], ollama=ollama,
-                                                      stores=stores, group=args.group)
+                                                      stores=stores, group=item["group"])
         print(f"Kontexte für {len(contexts)} Fragen bestimmt (Stufe S4)")
 
         with ANS_CKPT.open("a") as ck:

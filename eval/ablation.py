@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "eval"))
 
 from answer_eval import Faithfulness, generate, is_refusal, token_f1  # noqa: E402
-from retrieval_eval import span_hit  # noqa: E402
+from retrieval_eval import load_gold, span_hit  # noqa: E402
 
 from app.clients.ollama_client import OllamaClient  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
@@ -187,8 +187,9 @@ async def main() -> None:
     ap.add_argument("--plot-only", action="store_true")
     args = ap.parse_args()
 
-    if args.build_plain:
-        await build_plain(args.group)
+    if args.build_plain:  # je Gruppe des Gold-Sets (Dracula, Frankenstein, …)
+        for group in sorted({it["group"] for it in load_gold(args.gold, args.group)}):
+            await build_plain(group)
         return
     if args.plot_only:
         plot(json.loads((ROOT / "results" / "ablation.json").read_text())["summary"],
@@ -196,7 +197,7 @@ async def main() -> None:
         return
 
     stages = [s for s in STAGES if s["key"] in args.stages.split(",")]
-    gold = [json.loads(x) for x in Path(args.gold).read_text().splitlines() if x.strip()]
+    gold = load_gold(args.gold, args.group)
     if args.limit:
         gold = gold[: args.limit]
 
@@ -210,15 +211,17 @@ async def main() -> None:
     stores = {"prod": VectorStore(settings.qdrant_url, settings.qdrant_collection),
               PLAIN: VectorStore(settings.qdrant_url, PLAIN)}
     try:
-        n_plain = len(await stores[PLAIN].scroll_all(group_id=args.group))
-        if n_plain == 0:
-            sys.exit(f"{PLAIN} ist leer — erst `--build-plain` ausführen.")
+        groups = sorted({it["group"] for it in gold})
+        for group in groups:
+            if not await stores[PLAIN].scroll_all(group_id=group):
+                sys.exit(f"{PLAIN} hat keine Chunks für Gruppe {group} — erst `--build-plain`.")
+        n_plain = len(groups)
         await ollama.complete([{"role": "user", "content": "OK"}], args.model, max_tokens=1)
         ctx = await ollama.context_length(args.model)
         if ctx is None or ctx < 8000:
             sys.exit(f"Ollama läuft {args.model} mit Kontext {ctx} (< 8000) — `make ollama-ctx` + "
                      "Ollama-App neu starten, dann erneut.")
-        print(f"Kontextfenster {args.model}: {ctx} Token — ok; {PLAIN}: {n_plain} Chunks")
+        print(f"Kontextfenster {args.model}: {ctx} Token — ok; {PLAIN}: {n_plain} Gruppe(n)")
 
         CKPT.parent.mkdir(exist_ok=True)
         with CKPT.open("a") as ck:
@@ -229,7 +232,7 @@ async def main() -> None:
                         continue
                     t0 = time.perf_counter()
                     pts = await stage_points(stage, item["question"], ollama=ollama,
-                                             stores=stores, group=args.group)
+                                             stores=stores, group=item["group"])
                     gen = await generate(ollama, build_messages(item["question"], pts), args.model)
                     r = {"stage": stage["key"], "id": item["id"], "answer": gen["answer"],
                          "e2e_ms": (time.perf_counter() - t0) * 1000,

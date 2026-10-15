@@ -44,7 +44,7 @@ from app.graph.service import GraphService  # noqa: E402
 from app.rag.expander import expand_points  # noqa: E402
 from app.rag.prompt_builder import build_messages  # noqa: E402
 from app.rag.retriever import retrieve  # noqa: E402
-from retrieval_eval import chapter_roman, span_hit  # noqa: E402
+from retrieval_eval import chapter_roman, load_gold, span_hit  # noqa: E402
 
 NLI_MODEL = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
 
@@ -205,7 +205,7 @@ async def main() -> None:
 
     from rouge_score import rouge_scorer
 
-    gold = [json.loads(x) for x in Path(args.gold).read_text().splitlines() if x.strip()]
+    gold = load_gold(args.gold, args.group)
     rs = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=False)
     print(f"Lade NLI-Modell {NLI_MODEL} …")
     faith = Faithfulness()
@@ -228,7 +228,7 @@ async def main() -> None:
             retriever = graph.retrieve if graph is not None else retrieve
             pts = await retriever(
                 item["question"], ollama=ollama, vectors=vectors,
-                embed_model=settings.embed_model, top_k=args.k, group_id=args.group,
+                embed_model=settings.embed_model, top_k=args.k, group_id=item["group"],
             )
             if args.s2b:
                 pts = await expand_points(
