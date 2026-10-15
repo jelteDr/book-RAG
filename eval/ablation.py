@@ -214,7 +214,8 @@ async def main() -> None:
               PLAIN: VectorStore(settings.qdrant_url, PLAIN)}
     try:
         groups = sorted({it["group"] for it in gold})
-        for group in groups:
+        # Nur prüfen, wenn eine gewählte Stufe die Plain-Collection nutzt (S0/S1).
+        for group in groups if any(st["collection"] == PLAIN for st in stages) else []:
             if not await stores[PLAIN].scroll_all(group_id=group):
                 sys.exit(f"{PLAIN} hat keine Chunks für Gruppe {group} — erst `--build-plain`.")
         n_plain = len(groups)
