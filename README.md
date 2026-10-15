@@ -8,8 +8,9 @@ Quell-Passage zurückführen (Grounding & Erklärbarkeit). Kern des Projekts ist
 
 ## Ergebnisse auf einen Blick
 
-Gemessen auf einem handgelabelten Gold-Set (36 Fragen zu *Dracula*, passagen-genaue Labels),
-alles lokal, Hypothesen vorab notiert ([`eval/RESULTS.md`](eval/RESULTS.md)).
+Gemessen auf einem Gold-Set mit passagen-genauen Labels — 36 Fragen zu *Dracula* (handgelabelt)
+und 20 zu *Frankenstein* —, alles lokal, Hypothesen vorab notiert
+([`eval/RESULTS.md`](eval/RESULTS.md)).
 
 | Was | Vorher | Nachher |
 |---|---|---|
@@ -29,7 +30,11 @@ alles lokal, Hypothesen vorab notiert ([`eval/RESULTS.md`](eval/RESULTS.md)).
    Corrective RAG mit LangGraph brachten auf diesem Setup **keinen** Gewinn — dokumentiert, nicht
    versteckt.
 
-<sub>n=36, ein Buch: Tendenzen, die meisten Paarvergleiche sind nicht signifikant. Die
+**Zweites Buch bestätigt den Trend (n=56):** Small-to-Big verbessert Korrektheit (0.30 → 0.38),
+Faithfulness (0.61 → 0.70) und MRR (0.51 → 0.57) in *beiden* Büchern gleichgerichtet.
+
+<sub>Ablation n=36 (Dracula), Suite n=56 (beide Bücher): Tendenzen, die meisten Paarvergleiche
+sind einzeln nicht signifikant. Die
 Korrektheit stammt von einem LLM-Judge, der laut blindem Mensch-Abgleich (n=20, Kappa 0.30–0.42)
 **zu streng** urteilt — absolute Werte sind untere Schranken, Vergleiche bleiben verwertbar.
 Details: Abschnitt *Evaluation* unten und `eval/RESULTS.md`.</sub>

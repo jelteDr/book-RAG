@@ -806,6 +806,31 @@ Hit@8 0.89, MRR 0.590 — etwas leichter als Dracula (Hit@8 0.81, MRR 0.474). M�
 von einem LLM formulierte Fragen könnten näher an „suchbaren“ Formulierungen liegen; deshalb
 werden Ergebnisse auch getrennt je Buch berichtet.
 
+## Suite n=56 — zwei Bücher (`eval/ablation.py --stages S3,S4 --gold …v2…,…frankenstein…`)
+
+Aktuelle Pipeline (S3: contextual + dedup, k=6) vs. Kandidat S4 (+Small-to-Big, window 1, top 3),
+qwen2.5:7b, temp 0, NLI gefenstert, Judge qwen2.5:7b. Dracula-Zeilen aus dem Ablation-Checkpoint
+(identische Konfiguration → **reproduziert exakt**: S3 0.639/0.281, S4 0.702/0.344).
+
+| Stufe | Buch | n | Korrekt (Judge) | Faithfulness | Gold im Prompt | MRR | Refusal | False-Refusal |
+|---|---|---|---|---|---|---|---|---|
+| S3 k=6 | gesamt | 56 | 0.300 | 0.614 | 0.800 | 0.510 | 5/6 | 0/50 |
+| S3 k=6 | Dracula | 36 | 0.281 | 0.639 | 0.781 | 0.469 | 3/4 | 0/32 |
+| S3 k=6 | Frankenstein | 20 | 0.333 | 0.569 | 0.833 | 0.582 | 2/2 | 0/18 |
+| **S4 +S2B** | **gesamt** | 56 | **0.380** | **0.704** | 0.800 | **0.568** | 5/6 | 0/50 |
+| S4 +S2B | Dracula | 36 | 0.344 | 0.702 | 0.781 | 0.536 | 3/4 | 0/32 |
+| S4 +S2B | Frankenstein | 20 | 0.444 | 0.708 | 0.833 | 0.625 | 2/2 | 0/18 |
+
+Paired S3→S4 (n=50 beantwortbar): Faithfulness **18:9:23** (p ≈ 0.12), Korrektheit 7:3:40
+(p ≈ 0.34). Kosten: Prompt 13.7k → 20.2k Zeichen (+47 %), e2e-Median 13 s → 26 s (ein Lauf).
+
+**Befund:** Small-to-Big verbessert Korrektheit (+0.08), Faithfulness (+0.09) und MRR (+0.06) —
+**in beiden Büchern gleichgerichtet**, ohne zusätzliche Fehl-Verweigerungen. Einzeln knapp nicht
+signifikant, aber die Richtung ist über zwei unabhängige Bücher und drei Metriken konsistent;
+das ist belastbarer als jeder Einzelbefund zuvor. Empfehlung: `SMALL_TO_BIG_ENABLED=true` als
+Default (Preis: ~2× Antwortzeit). Mit der Judge-Korrektur aus der Mensch-Validierung
+(≈ 0.80·p + 0.50·(1−p)) läge die menschlich beurteilte Korrektheit bei grob ~0.59 (S3) bzw. ~0.61 (S4).
+
 ## Judge-Validierung — LLM-Judge gegen menschliche Urteile (`notebooks/judge_validation.ipynb`)
 
 **Anlass:** Die Korrektheit in Ablation und Modellvergleich stammt von LLM-Judges, die untereinander
