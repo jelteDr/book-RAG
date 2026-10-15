@@ -790,6 +790,22 @@ llama3.1:8b 9:3 (p 0.15) / 6:2 (p 0.29); qwen3 4:2 / 10:7; mistral 2:3 / 6:6; ge
   Modell-Dropdown, mit den genannten Nachteilen. gemma4 ist die interessanteste Alternative für
   „ehrlich + schnell“.
 
+## Gold-Set Frankenstein (`eval/gold_frankenstein.jsonl`)
+
+Zweites, gemeinfreies Buch (Mary Shelley, *Frankenstein*, Gutenberg #84; Gruppe `frankenstein`,
+297 Chunks, contextual). 20 Items nach demselben Plan wie Gold v2: 10 fact, 5 paraphrase, 3 multi,
+2 unanswerable; Stichprobe stratifiziert über das Buch (Seed 42, `notebooks/gold_frankenstein.ipynb`).
+**Kuratiert von Claude** (anderes Modell als das getestete qwen): jede Passage im Originaltext
+gelesen, Fragen auf Deutsch in eigenen Worten (Text ist englisch → kein Wortlaut-Leak), Spans
+zeichengenau aus wörtlichen Start-/Endstellen berechnet; Multi-Hop-Items mit zweiter Stelle aus
+der Volltextsuche; Unbeantwortbares gegen den Volltext geprüft. `source: "claude-kuratiert"`.
+Kombiniert: `--gold eval/gold_v2.jsonl,eval/gold_frankenstein.jsonl` (n=56).
+
+Retrieval-Smoke (dense + contextual + dedup, k=8, span-basiert, n=18 beantwortbar): Hit@1 0.50,
+Hit@8 0.89, MRR 0.590 — etwas leichter als Dracula (Hit@8 0.81, MRR 0.474). Möglicher Grund:
+von einem LLM formulierte Fragen könnten näher an „suchbaren“ Formulierungen liegen; deshalb
+werden Ergebnisse auch getrennt je Buch berichtet.
+
 ## Judge-Validierung — LLM-Judge gegen menschliche Urteile (`notebooks/judge_validation.ipynb`)
 
 **Anlass:** Die Korrektheit in Ablation und Modellvergleich stammt von LLM-Judges, die untereinander
