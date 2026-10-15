@@ -134,6 +134,7 @@
           </div>
         }
         @for (msg of messages(); track $index) {
+          @if (regeneratingIndex() !== $index) {
           <div class="flex" [class.justify-end]="msg.role === 'user'">
             <div
               class="min-w-0 max-w-[90%] whitespace-pre-wrap break-words rounded-[18px] px-4 py-2.5 leading-relaxed"
@@ -206,9 +207,52 @@
                     }
                   </div>
                 }
+                <!-- Antwort-Varianten: ‹ 2/3 › blättern, ↻ an der letzten Antwort erzeugt eine neue -->
+                @if ((msg.variants?.length ?? 0) > 1 || (isLastAnswer($index) && currentConversationId())) {
+                  <div class="-mb-1 mt-1 flex items-center gap-0.5 whitespace-normal text-xs text-ink-muted">
+                    @if ((msg.variants?.length ?? 0) > 1) {
+                      <button
+                        type="button"
+                        class="icon-btn !size-8"
+                        aria-label="Vorherige Antwort"
+                        title="Vorherige Antwort"
+                        [disabled]="streaming() || (msg.selectedVariant ?? 0) === 0"
+                        (click)="selectVariant($index, -1)"
+                      >
+                        <lucide-icon [img]="icons.ChevronLeft" [size]="16" aria-hidden="true" />
+                      </button>
+                      <span class="tabular-nums" aria-live="polite">
+                        {{ (msg.selectedVariant ?? 0) + 1 }}/{{ msg.variants!.length }}
+                      </span>
+                      <button
+                        type="button"
+                        class="icon-btn !size-8"
+                        aria-label="Nächste Antwort"
+                        title="Nächste Antwort"
+                        [disabled]="streaming() || (msg.selectedVariant ?? 0) === msg.variants!.length - 1"
+                        (click)="selectVariant($index, 1)"
+                      >
+                        <lucide-icon [img]="icons.ChevronRight" [size]="16" aria-hidden="true" />
+                      </button>
+                    }
+                    @if (isLastAnswer($index) && currentConversationId()) {
+                      <button
+                        type="button"
+                        class="icon-btn !size-8"
+                        aria-label="Antwort neu erzeugen"
+                        title="Neu erzeugen"
+                        [disabled]="streaming()"
+                        (click)="regenerate()"
+                      >
+                        <lucide-icon [img]="icons.RefreshCw" [size]="15" aria-hidden="true" />
+                      </button>
+                    }
+                  </div>
+                }
               } @else {<span>{{ msg.text }}</span>}
             </div>
           </div>
+          }
         }
         @if (streaming()) {
           <div class="flex" aria-live="polite">

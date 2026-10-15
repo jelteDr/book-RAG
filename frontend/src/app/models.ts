@@ -30,12 +30,24 @@ export interface CragInfo {
   refused: boolean;
 }
 
+/** Eine von mehreren Antworten auf dieselbe Frage (↻ „neu erzeugen“). */
+export interface Variant {
+  id?: number;
+  text: string;
+  sources: Source[];
+  meta?: Meta;
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   text: string;
   sources?: Source[];
   meta?: Meta;
   error?: string;
+  /** DB-ID der angezeigten Antwort (für die Varianten-Auswahl). */
+  variantId?: number;
+  variants?: Variant[];
+  selectedVariant?: number;
 }
 
 export interface ChatRequest {
@@ -43,6 +55,8 @@ export interface ChatRequest {
   model: string | null;
   group_id: string | null;
   conversation_id?: number | null;
+  /** true = letzte Frage der Unterhaltung erneut beantworten (neue Antwort-Variante). */
+  regenerate?: boolean;
   /** 'crag' = Corrective RAG (Quellen prüfen, ggf. neu suchen); fehlt = Standardpfad. */
   mode?: 'crag' | null;
 }
@@ -58,7 +72,14 @@ export interface ConversationDetail {
   id: number;
   title: string;
   group_id: string | null;
-  messages: { role: 'user' | 'assistant'; content: string; model: string | null; sources: Source[] }[];
+  messages: (
+    | { role: 'user'; id: number; content: string }
+    | {
+        role: 'assistant';
+        variants: { id: number; content: string; model: string | null; sources: Source[] }[];
+        selected: number;
+      }
+  )[];
 }
 
 export interface ModelsResponse {
@@ -144,5 +165,8 @@ export interface ChatEvent {
     message?: string;
     conversation_id?: number;
     crag?: CragInfo;
+    message_id?: number;
+    variant_index?: number;
+    n_variants?: number;
   };
 }

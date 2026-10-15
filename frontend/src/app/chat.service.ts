@@ -32,6 +32,11 @@ export class ChatService {
     return resp.json();
   }
 
+  /** Antwort-Variante auswählen — sie geht ab jetzt in den Verlauf für Folgefragen. */
+  async selectVariant(conversationId: number, messageId: number): Promise<void> {
+    await fetch(`/api/conversations/${conversationId}/messages/${messageId}/select`, { method: 'PATCH' });
+  }
+
   async deleteConversation(id: number): Promise<void> {
     await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
   }
