@@ -71,6 +71,8 @@ Angular (minimal, Signals) ──REST + SSE──► FastAPI (Python 3.12)
 ```
 
 - **Ollama** — lokales LLM (`qwen2.5:7b-instruct`) + Embeddings (`bge-m3`, multilingual)
+- **vllm-metal** (optional) — zweiter Inferenz-Server auf der Apple-GPU; ein `InferenceRouter`
+  schickt Chat für dort bediente Modelle an vLLM, alles andere und alle Embeddings an Ollama
 - **FastAPI** — dünne Routen + `RagService` (retrieve → Prompt → Streaming → Zitat-Mapping)
 - **Qdrant** — Vektor-Suche (Cosine) mit Metadaten-Filter (Gruppen/Bücher/Sammelgruppen)
 - **PostgreSQL** — Gruppen/Bücher, Modell-Registry, gespeicherte Unterhaltungen, Anfrage-Log
@@ -126,6 +128,24 @@ make ingest               # Demo-Buch (Public Domain) ingesten
 
 > **macOS-Hinweis:** Docker-Container erreichen das Host-Ollama nur, wenn es auf `0.0.0.0` lauscht
 > (`make ollama-host` + Ollama-App-Neustart). Das ist der einzige manuelle Einmalschritt.
+
+### Optional: vllm-metal als zweiter Inferenz-Server
+
+[vllm-metal](https://github.com/vllm-project/vllm-metal) bringt vLLM (Paged KV-Cache, Continuous
+Batching, Prefix-Caching) über MLX auf die Apple-GPU. Es läuft **nativ** auf dem Host — vLLM im
+Docker-Container hätte auf macOS keinen GPU-Zugriff und liefe nur auf der CPU.
+
+```bash
+make vllm-install         # EINMALIG: Homebrew-Formel (macOS 15+, Apple Silicon)
+make vllm-serve           # eigenes Terminal: mlx-community/Qwen2.5-7B-Instruct-4bit auf :8010
+make up-vllm              # Stack mit VLLM_ENABLED=true
+```
+
+Das vLLM-Modell erscheint zusätzlich im Modell-Dropdown — die Auswahl entscheidet, welcher Server
+antwortet. Embeddings bleiben immer bei Ollama, weil der Qdrant-Index mit Ollamas `bge-m3` gebaut
+ist. `/health` zeigt `"vllm": true|false|null` (null = nicht aktiviert). Anderes Modell:
+`make vllm-serve VLLM_MODEL=...`; als Default `CHAT_MODEL` auf den vLLM-Namen setzen. Speicher:
+`VLLM_MEM` (Anteil am Unified Memory, Default 0.35) — Ollama läuft parallel weiter.
 
 ## Evaluation (der Kern)
 
@@ -236,7 +256,9 @@ generatives RAG-System das aussagekräftigere Qualitätsmaß (misst *Stützung*,
 
 ## Design-Entscheidungen
 
-- **Ollama statt vLLM:** läuft nativ (Metal) auf Apple Silicon; ein Prozess für Chat + Embeddings.
+- **Ollama als Basis, vllm-metal zuschaltbar:** Ollama läuft nativ (Metal) auf Apple Silicon, ein
+  Prozess für Chat + Embeddings. Klassisches vLLM braucht CUDA/ROCm (auf dem Mac nur CPU), deshalb
+  nur vllm-metal — als Router-Ziel pro Modell, nicht als Ersatz, damit Vergleiche im selben Stack laufen.
 - **`bge-m3` (Embeddings):** multilingual → deutsche Fragen gegen englische Texte, ohne `torch`-Abhängigkeit im Backend.
 - **Service-Schicht (`RagService`):** Geschäftslogik gekapselt, Routen dünn (OOP + KISS).
 - **Faithfulness statt PPL:** Perplexität misst Fluenz, nicht Korrektheit/Grounding.
@@ -301,7 +323,7 @@ frontend/   Angular (chat/ · groups/ · models/ · dashboard/ · shell/ · ui/ 
 eval/       Gold-Set + Experimente (retrieval/lang/hybrid/reranker/answer) + RESULTS.md
 notebooks/  DS-Notebooks (Gold-Set v2: Span-Labels, PCA-Karte, Wortwolken)
 results/    Charts & Roh-Ergebnisse
-benchmark/  Serving-Benchmark (Ollama vs. llama-server)
+benchmark/  Serving-Benchmark (Ollama vs. llama-server vs. vllm-metal, alle über /v1)
 docs/       Projektplan
 ```
 

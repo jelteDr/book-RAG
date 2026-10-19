@@ -1,4 +1,4 @@
-"""Health-Check: prüft Erreichbarkeit von Ollama und Qdrant."""
+"""Health-Check: prüft Erreichbarkeit von Ollama, vllm-metal (falls aktiv) und Qdrant."""
 
 from fastapi import APIRouter, Request
 
@@ -17,6 +17,7 @@ async def health(request: Request) -> dict:
     except Exception:
         ollama_ok = False
 
+    vllm_ok = await request.app.state.ollama.vllm_status()
     qdrant_ok = await request.app.state.vectors.health()
 
     status = "ok" if (ollama_ok and qdrant_ok) else "degraded"
@@ -26,6 +27,8 @@ async def health(request: Request) -> dict:
         # Kontextfenster des geladenen Chat-Modells (None = nicht geladen); < 8192 heißt:
         # RAG-Prompts werden still abgeschnitten -> `make ollama-ctx` + Ollama neu starten.
         "ollama_context_length": context_length,
+        # None = vllm-metal nicht aktiviert (VLLM_ENABLED); False = aktiviert, aber nicht erreichbar.
+        "vllm": vllm_ok,
         "qdrant": qdrant_ok,
         "reranker": request.app.state.reranker.active,
         "faithfulness": request.app.state.faithfulness.active,

@@ -26,7 +26,7 @@ import time
 import uuid
 from pathlib import Path
 
-from app.clients.ollama_client import OllamaClient
+from app.clients.inference_router import build_inference_client
 from app.clients.qdrant_client import VectorStore
 from app.config import settings
 from app.db.models import Book, Group
@@ -64,7 +64,7 @@ async def run(book_db_id: int, path: Path, contextual: bool, commit: bool) -> No
         print("  Vorschau — mit --commit neu einlesen.")
         return
 
-    ollama = OllamaClient(settings.ollama_base_url, timeout=300)
+    ollama = build_inference_client(settings, timeout=300)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     new_key = uuid.uuid4().hex
     try:

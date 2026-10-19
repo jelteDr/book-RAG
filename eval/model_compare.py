@@ -36,7 +36,7 @@ from ablation import STAGES, answerable_items, judge, sign_test, stage_points  #
 from answer_eval import Faithfulness, generate, is_refusal, token_f1  # noqa: E402
 from retrieval_eval import load_gold, span_hit  # noqa: E402
 
-from app.clients.ollama_client import OllamaClient  # noqa: E402
+from app.clients.inference_router import build_inference_client  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.rag.prompt_builder import build_messages  # noqa: E402
@@ -120,7 +120,7 @@ async def measure_latency(models: list[str], args) -> None:
     """Im Hauptlauf schwankten die Zeiten durch Last (llama3.1:8b 9 tok/s < gemma4 16 tok/s).
     Hier: ruhiges System, jedes Modell aufwärmen, dann N Fragen mit identischem Kontext."""
     gold = load_gold(args.gold, args.group)[: args.latency]
-    ollama = OllamaClient(settings.ollama_base_url, timeout=600)
+    ollama = build_inference_client(settings, timeout=600)
     stores = {"prod": VectorStore(settings.qdrant_url, settings.qdrant_collection)}
     out = {}
     try:
@@ -189,7 +189,7 @@ async def main() -> None:
             v = json.loads(line)
             verdicts[v["key"]] = v["ja"]
 
-    ollama = OllamaClient(settings.ollama_base_url, timeout=600)
+    ollama = build_inference_client(settings, timeout=600)
     stores = {"prod": VectorStore(settings.qdrant_url, settings.qdrant_collection)}
     try:
         # Kontext je Frage EINMAL bestimmen -> jedes Modell sieht exakt dieselben Quellen.

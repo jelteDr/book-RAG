@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT / "eval"))
 from answer_eval import Faithfulness, generate, is_refusal, token_f1  # noqa: E402
 from retrieval_eval import span_hit  # noqa: E402
 
-from app.clients.ollama_client import OllamaClient  # noqa: E402
+from app.clients.inference_router import build_inference_client  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.flow.crag import CragFlow  # noqa: E402
@@ -164,7 +164,7 @@ async def main() -> None:
     from rouge_score import rouge_scorer
     rs = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=False)
 
-    ollama = OllamaClient(settings.ollama_base_url, timeout=300)
+    ollama = build_inference_client(settings, timeout=300)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
 
     def make_flow(with_check: bool, strategy: str = "filter") -> CragFlow:

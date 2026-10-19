@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from app.clients.ollama_client import OllamaClient
+from app.clients.inference_router import build_inference_client
 from app.clients.qdrant_client import VectorStore
 from app.config import settings
 from app.graph.communities import (
@@ -68,7 +68,7 @@ async def run(args: argparse.Namespace) -> None:
     if not (args.summarize or args.embed):
         return
 
-    ollama = OllamaClient(settings.ollama_base_url, timeout=300.0)
+    ollama = build_inference_client(settings, timeout=300.0)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     try:
         reports = load_reports(base / REPORTS_FILE)

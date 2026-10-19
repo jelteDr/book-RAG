@@ -1,4 +1,4 @@
-"""Async-Benchmark für einen OpenAI-kompatiblen LLM-Server (Ollama oder llama-server).
+"""Async-Benchmark für einen OpenAI-kompatiblen LLM-Server (Ollama, llama-server, vllm-metal).
 
 Misst je Concurrency-Stufe: TTFT, TPS, E2E-Latenz (P50/P95/P99) und aggregierten
 Durchsatz. Ergebnisse als CSV in results/.
@@ -6,6 +6,8 @@ Durchsatz. Ergebnisse als CSV in results/.
 Beispiel:
   python benchmark/benchmark.py --base-url http://localhost:11434/v1 \
       --model llama3.2:3b --concurrency 1 2 4 8 --requests 16
+  python benchmark/benchmark.py --base-url http://localhost:8010/v1 \
+      --model mlx-community/Qwen2.5-7B-Instruct-4bit --concurrency 1 2 4 8 --requests 16
 """
 
 from __future__ import annotations

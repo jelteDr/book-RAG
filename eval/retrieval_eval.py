@@ -27,7 +27,7 @@ from pathlib import Path
 # app-Module verfügbar machen (Skript liegt in eval/, App in backend/).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from app.clients.ollama_client import OllamaClient  # noqa: E402
+from app.clients.inference_router import build_inference_client  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.rag.retriever import retrieve  # noqa: E402
@@ -113,7 +113,7 @@ async def evaluate(gold_path: str, group_id: str | None, k: int, embed_model: st
     # unanswerable-Items (v2) messen Antwort-Ehrlichkeit, nicht Retrieval.
     gold = [g for g in gold if g.get("qtype") != "unanswerable"]
 
-    ollama = OllamaClient(settings.ollama_base_url)
+    ollama = build_inference_client(settings)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
 
     chapter_arm = _Arm(k)

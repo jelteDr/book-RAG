@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from app.clients.ollama_client import OllamaClient  # noqa: E402
+from app.clients.inference_router import build_inference_client  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.rag.retriever import retrieve  # noqa: E402
@@ -49,7 +49,7 @@ async def main() -> None:
     print(f"Lade Reranker {RERANKER} … (erster Lauf lädt das Modell)")
     reranker = CrossEncoder(RERANKER, max_length=512)
 
-    ollama = OllamaClient(settings.ollama_base_url)
+    ollama = build_inference_client(settings)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
 
     methods = ("dense", "reranked")

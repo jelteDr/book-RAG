@@ -34,6 +34,10 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - CHAT_MODEL=${CHAT_MODEL:-qwen2.5:7b-instruct-q4_K_M}
       - EMBED_MODEL=${EMBED_MODEL:-bge-m3}
+      # Opt-in vllm-metal (nativ auf dem Host, Metal-GPU; make vllm-serve): Chat fuer dort
+      # bediente Modelle laeuft ueber vLLM, Embeddings bleiben bei Ollama.
+      - VLLM_ENABLED=${VLLM_ENABLED:-false}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-http://host.docker.internal:8010}
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_COLLECTION=${QDRANT_COLLECTION:-book_chunks}
       - TOP_K=${TOP_K:-8}

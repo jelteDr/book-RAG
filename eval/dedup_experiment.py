@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from app.clients.ollama_client import OllamaClient  # noqa: E402
+from app.clients.inference_router import build_inference_client  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.rag.retriever import DEDUP_EXTRA, dedup_overlaps  # noqa: E402
@@ -55,7 +55,7 @@ def n_duplicates(points: list) -> int:
 
 async def run(gold_path: str, group_id: str, k: int) -> None:
     gold = [json.loads(line) for line in Path(gold_path).read_text().splitlines() if line.strip()]
-    ollama = OllamaClient(settings.ollama_base_url)
+    ollama = build_inference_client(settings)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     flt = models.Filter(
         must=[models.FieldCondition(key="group_id", match=models.MatchValue(value=group_id))]
