@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
+from app.clients.inference_router import build_inference_client
 from app.clients.ollama_client import OllamaClient
 from app.config import settings
 from app.graph.builder import build_graph, stats
@@ -70,7 +71,7 @@ async def run(group_id: str, extract_path: Path, out_dir: Path, embed: bool,
         print(f"    ambig: {key}  ~  {', '.join(cands)}")
 
     if embed:
-        ollama = OllamaClient(settings.ollama_base_url)
+        ollama = build_inference_client(settings)
         try:
             await embed_entities(kg, ollama, settings.embed_model)
         finally:

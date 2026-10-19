@@ -38,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
+from app.clients.inference_router import build_inference_client  # noqa: E402
 from app.clients.ollama_client import OllamaClient  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
@@ -183,7 +184,7 @@ async def run(args: argparse.Namespace) -> None:
           f"{sum(1 for g in gold if g['qtype'] == 'control')} Kontrolle), Arme {arms}, "
           f"{len(index.reports)} Community-Berichte, m={args.m}")
 
-    ollama = OllamaClient(settings.ollama_base_url, timeout=600.0)
+    ollama = build_inference_client(settings, timeout=600.0)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     rows = load_answers() if args.resume else {}
     RESULTS_DIR.mkdir(exist_ok=True)

@@ -23,7 +23,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from app.clients.ollama_client import OllamaClient
+from app.clients.inference_router import build_inference_client
 from app.clients.qdrant_client import VectorStore
 from app.config import settings
 from app.ingestion.contextualizer import embedding_text, generate_context
@@ -45,7 +45,7 @@ def _load_contexts(path: Path) -> dict[str, str]:
 
 
 async def run(group_id: str | None, book_id: str | None, ctx_path: Path, batch: int) -> None:
-    ollama = OllamaClient(settings.ollama_base_url)
+    ollama = build_inference_client(settings)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     try:
         records = await vectors.scroll_all(group_id)

@@ -42,6 +42,7 @@ sys.path.insert(0, str(ROOT / "eval"))
 from answer_eval import Faithfulness, generate, is_refusal, token_f1  # noqa: E402
 from retrieval_eval import load_gold, span_hit  # noqa: E402
 
+from app.clients.inference_router import build_inference_client  # noqa: E402
 from app.clients.ollama_client import OllamaClient  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
@@ -85,7 +86,7 @@ STAGES = [
 async def build_plain(group: str) -> None:
     prod = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     plain = VectorStore(settings.qdrant_url, PLAIN)
-    ollama = OllamaClient(settings.ollama_base_url, timeout=300)
+    ollama = build_inference_client(settings, timeout=300)
     try:
         await plain.ensure_collection()
         records = await prod.scroll_all(group_id=group)
@@ -209,7 +210,7 @@ async def main() -> None:
             r = json.loads(line)
             done[(r["stage"], r["id"])] = r
 
-    ollama = OllamaClient(settings.ollama_base_url, timeout=300)
+    ollama = build_inference_client(settings, timeout=300)
     stores = {"prod": VectorStore(settings.qdrant_url, settings.qdrant_collection),
               PLAIN: VectorStore(settings.qdrant_url, PLAIN)}
     try:

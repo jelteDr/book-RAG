@@ -79,7 +79,7 @@ async def models_info() -> list[dict]:
 
 @router.post("/models/sync")
 async def models_sync(request: Request) -> dict:
-    """Synchronisiert die Registry mit den lokal verfügbaren Ollama-Modellen."""
+    """Synchronisiert die Registry mit den lokal verfügbaren Modellen (Ollama + vllm-metal)."""
     synced = await sync_models(session_factory, request.app.state.ollama)
     return {"synced": synced}
 
@@ -95,7 +95,7 @@ async def patch_model(name: str, patch: ModelPatch) -> dict:
             info.cutoff_date = patch.cutoff_date
         if patch.parameter_count is not None:
             info.parameter_count = patch.parameter_count
-        info.source = "ollama+kuratiert"
+        info.source = f"{(info.source or 'ollama').split('+')[0]}+kuratiert"
         session.add(info)
         await session.commit()
         await session.refresh(info)

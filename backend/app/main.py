@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.clients.ollama_client import OllamaClient
+from app.clients.inference_router import build_inference_client
 from app.clients.qdrant_client import VectorStore
 from app.config import settings
 from app.db.session import init_db, session_factory
@@ -21,7 +21,8 @@ from app.services.reranker_service import RerankerService
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Clients + Service für die Laufzeit der App anlegen.
-    app.state.ollama = OllamaClient(settings.ollama_base_url)
+    # `ollama` ist der InferenceRouter: Ollama + optional vllm-metal (gleiche Schnittstelle).
+    app.state.ollama = build_inference_client(settings)
     app.state.vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     app.state.reranker = RerankerService(settings.reranker_model, settings.reranker_enabled)
     app.state.faithfulness = FaithfulnessService(

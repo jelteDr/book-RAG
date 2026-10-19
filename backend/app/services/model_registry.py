@@ -1,6 +1,6 @@
-"""Synchronisiert die model_info-Tabelle mit Ollama (`/api/show`).
+"""Synchronisiert die model_info-Tabelle mit Ollama (`/api/show`) und ggf. vllm-metal.
 
-Auto-Felder (Familie, Parametergröße, Quantisierung, Kontextlänge) kommen aus Ollama;
+Auto-Felder (Familie, Parametergröße, Quantisierung, Kontextlänge) kommen vom Server;
 `cutoff_date` (und ein manuell gesetzter `parameter_count`) sind **kuratiert** und werden
 beim Sync NICHT überschrieben — Ollama liefert kein Trainings-Cutoff.
 """
@@ -12,7 +12,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.clients.ollama_client import OllamaClient
+from app.clients.inference_router import InferenceRouter
 from app.db.models import ModelInfo
 
 _SIZE_RE = re.compile(r"([\d.]+)\s*([BMK])", re.IGNORECASE)
@@ -36,7 +36,7 @@ def _context_length(show: dict) -> int | None:
     return None
 
 
-async def sync_models(session_factory: async_sessionmaker, ollama: OllamaClient) -> int:
+async def sync_models(session_factory: async_sessionmaker, ollama: InferenceRouter) -> int:
     """Upsertet alle lokal verfügbaren Modelle. Gibt die Anzahl synchronisierter zurück."""
     tags = await ollama.list_models()
     names = [t["name"] for t in tags if t.get("name")]
@@ -57,7 +57,8 @@ async def sync_models(session_factory: async_sessionmaker, ollama: OllamaClient)
             info.context_length = _context_length(show)
             if info.parameter_count is None:  # kuratierten Wert nicht überschreiben
                 info.parameter_count = _parse_param_count(info.parameter_size)
-            info.source = "ollama+kuratiert" if info.cutoff_date else "ollama"
+            backend = show.get("backend", "ollama")  # VLLMClient.show setzt "vllm"
+            info.source = f"{backend}+kuratiert" if info.cutoff_date else backend
             info.updated_at = datetime.utcnow()
 
             session.add(info)

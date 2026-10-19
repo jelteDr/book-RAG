@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from app.clients.ollama_client import OllamaClient  # noqa: E402
+from app.clients.inference_router import build_inference_client  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.rag.expander import expand_points  # noqa: E402
@@ -69,7 +69,7 @@ async def run(gold_path: str, group_id: str | None, k: int, window: int, top_n: 
     gold = [json.loads(line) for line in Path(gold_path).read_text().splitlines() if line.strip()]
     gold = [g for g in gold if g.get("qtype") != "unanswerable" and g.get("spans")]
 
-    ollama = OllamaClient(settings.ollama_base_url)
+    ollama = build_inference_client(settings)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     plain_arm, exp_arm = _Arm("plain"), _Arm(f"expanded (window={window}, top_n={top_n})")
     better = worse = same = 0

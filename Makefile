@@ -5,7 +5,8 @@ FRONTEND_PORT ?= 4200
 BACKEND_PORT  ?= 8001
 
 .DEFAULT_GOAL := help
-.PHONY: help up up-ml down restart clean setup models ollama-host ollama-ctx ingest eval logs ps \
+.PHONY: help up up-ml up-vllm down restart clean setup models ollama-host ollama-ctx vllm-install vllm-serve \
+	ingest eval logs ps \
 	graph graph-build eval-graph graph-communities eval-global eval-crag eval-ablation eval-models
 
 help: ## Diese Übersicht anzeigen
@@ -25,6 +26,12 @@ up-ml: ## Wie 'up', aber mit Reranker + Faithfulness (grosses Image: torch!)
 	@echo ""
 	@echo "ML-Extras aktiv. Status: curl http://localhost:$(BACKEND_PORT)/health"
 	@echo "Achtung: Reranker + NLI + Ollama gleichzeitig ist auf 24 GB RAM knapp."
+
+up-vllm: ## Wie 'up', aber Backend routet vllm-metal-Modelle an vLLM (vorher: make vllm-serve)
+	VLLM_ENABLED=true docker compose up -d --build
+	@echo ""
+	@echo "vllm-metal aktiv. Status: curl http://localhost:$(BACKEND_PORT)/health  (\"vllm\": true)"
+	@echo "Im Chat das Modell $(VLLM_MODEL) waehlen."
 
 down: ## Alle Container stoppen (Volumes/Daten bleiben erhalten)
 	docker compose down
@@ -52,6 +59,22 @@ ollama-host: ## Einmalig (macOS): Host-Ollama für Container erreichbar machen
 ollama-ctx: ## Einmalig (macOS): Kontextfenster erhöhen — sonst schneidet Ollama RAG-Prompts bei 4096 Token ab
 	launchctl setenv OLLAMA_CONTEXT_LENGTH 16384
 	@echo "Gesetzt. Bitte die Ollama-App EINMAL beenden und neu öffnen (lädt Modelle mit num_ctx=16384)."
+
+# vllm-metal: nativ auf dem Host (Docker auf macOS hat keinen GPU-Zugriff -> nur CPU).
+# Ein Prozess = ein Modell. MEM begrenzt den Anteil am Unified Memory (Gewichte + KV-Cache);
+# 0.35 von 24 GB lässt Platz für Ollama (bge-m3 + ggf. Chat-Modell) und Docker.
+VLLM_MODEL ?= mlx-community/Qwen2.5-7B-Instruct-4bit
+VLLM_PORT  ?= 8010
+VLLM_CTX   ?= 16384
+VLLM_MEM   ?= 0.35
+
+vllm-install: ## Einmalig: vllm-metal installieren (Homebrew; Apple Silicon, macOS 15+)
+	brew tap vllm-project/vllm-metal https://github.com/vllm-project/vllm-metal
+	brew install vllm-project/vllm-metal/vllm-metal
+
+vllm-serve: ## vllm-metal nativ starten (Vordergrund; VLLM_MODEL, VLLM_PORT überschreibbar)
+	vllm serve $(VLLM_MODEL) --host 0.0.0.0 --port $(VLLM_PORT) \
+		--max-model-len $(VLLM_CTX) --gpu-memory-utilization $(VLLM_MEM)
 
 # Gruppe für Demo-Ingest + Eval (überschreibbar: make eval GROUP=...)
 GROUP ?= Horror

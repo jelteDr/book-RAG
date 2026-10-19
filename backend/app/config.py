@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     chat_model: str = "qwen2.5:7b-instruct-q4_k_m"
     embed_model: str = "bge-m3"  # FEST – Wechsel würde den Index inkonsistent machen.
 
+    # vllm-metal (optional, opt-in): zweiter Inferenz-Server auf der Apple-GPU (MLX).
+    # Chat/Completion für die dort bedienten Modelle laufen über vLLM, alles andere und
+    # ALLE Embeddings bleiben bei Ollama (Index-Konsistenz). Default-Modell umstellen:
+    # CHAT_MODEL auf den vLLM-Modellnamen setzen (z. B. mlx-community/Qwen2.5-7B-Instruct-4bit).
+    vllm_enabled: bool = False
+    vllm_base_url: str = "http://localhost:8010"
+
     # Qdrant.
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "book_chunks"

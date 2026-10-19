@@ -22,7 +22,7 @@ import json
 import time
 from pathlib import Path
 
-from app.clients.ollama_client import OllamaClient
+from app.clients.inference_router import build_inference_client
 from app.clients.qdrant_client import VectorStore
 from app.config import settings
 from app.graph.extractor import extract_chunk
@@ -61,7 +61,7 @@ async def run(
     group_id: str, book_id: str | None, out_path: Path, model: str,
     limit: int | None, retry_errors: bool,
 ) -> None:
-    ollama = OllamaClient(settings.ollama_base_url, timeout=300.0)
+    ollama = build_inference_client(settings, timeout=300.0)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     try:
         records = await vectors.scroll_all(group_id)

@@ -33,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from app.clients.ollama_client import OllamaClient  # noqa: E402
+from app.clients.inference_router import build_inference_client  # noqa: E402
 from app.clients.qdrant_client import VectorStore  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.graph.builder import stats  # noqa: E402
@@ -146,7 +146,7 @@ async def run(args: argparse.Namespace) -> None:
         for s in (0.40, 0.50):
             arms[f"link τ={s}"] = ("link", replace(base_params, min_sim=s))
 
-    ollama = OllamaClient(settings.ollama_base_url)
+    ollama = build_inference_client(settings)
     vectors = VectorStore(settings.qdrant_url, settings.qdrant_collection)
     dense_arm = Arm("dense", args.k)
     graph_arms = {name: Arm(name, args.k) for name in arms}
